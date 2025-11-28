@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klinkers & Co | Dé Stratenmaker van Gouda</title>
+    <style>
+        /* ALGEMENE STIJLEN */
+        :root {
+            --primary-color: #E65100; /* Oranje voor de bouw/straatwerk sfeer */
+            --secondary-color: #263238; /* Donkergrijs */
+            --light-bg: #f4f4f4;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        h1, h2, h3 {
+            margin-bottom: 10px;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        /* KNOPPEN */
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: var(--primary-color);
+            color: var(--white);
+            border-radius: 5px;
+            font-weight: bold;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: #bf360c;
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid var(--white);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--white);
+            color: var(--secondary-color);
+        }
+
+        /* HEADER & NAVIGATIE */
+        header {
+            background-color: var(--secondary-color);
+            color: var(--white);
+            padding: 15px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .logo span {
+            color: var(--white);
+        }
+
+        nav ul {
+            display: flex;
+            gap: 20px;
+        }
+
+        nav ul li a {
+            font-weight: 500;
+        }
+
+        nav ul li a:hover {
+            color: var(--primary-color);
+        }
+
+        /* HERO SECTIE (Bovenste deel) */
+        .hero {
+            background-color: #555; /* Hier zou een foto moeten komen */
+            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1621252179027-94459d27d3ee?auto=format&fit=crop&w=1920&q=80'); /* Placeholder foto van stenen */
+            background-size: cover;
+            background-position: center;
+            height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--white);
+        }
+
+        .hero-content h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .hero-content p {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* HET GOUDSE PROBLEEM */
+        .gouda-problem {
+            background-color: var(--white);
+            padding: 60px 0;
+            text-align: center;
+        }
+
+        .gouda-problem h2 {
+            color: var(--secondary-color);
+            font-size: 2.2rem;
+        }
+
+        .gouda-problem p {
+            max-width: 800px;
+            margin: 0 auto 40px auto;
+        }
+
+        .features {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .feature-box {
+            background: var(--light-bg);
+            padding: 30px;
+            border-radius: 8px;
+            width: 30%;
+            min-width: 250px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .feature-box h3 {
+            color: var(--primary-color);
+        }
+
+        /* DIENSTEN (PARTICULIER & ZAKELIJK) */
+        .services {
+            padding: 60px 0;
+            background-color: var(--light-bg);
+        }
+
+        .service-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .service-grid {
+                grid-template-columns: 1fr;
+            }
+            .feature-box {
+                width: 100%;
+            }
+        }
+
+        .service-card {
+            background: var(--white);
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .service-card h2 {
+            border-bottom: 3px solid var(--primary-color);
+            display: inline-block;
+            padding-bottom: 5px;
+        }
+
+        /* CALL TO ACTION */
+        .cta-bar {
+            background-color: var(--primary-color);
+            color: var(--white);
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        /* FOOTER */
+        footer {
+            background-color: var(--secondary-color);
+            color: #ccc;
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        footer p {
+            font-size: 0.9rem;
+        }
+
+        /* CONTACT FORMULIER STIJL (Simpel) */
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="logo">Klinkers <span>& Co</span></div>
+            <nav>
+                <ul>
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#particulier">Particulier</a></li>
+                    <li><a href="#zakelijk">Aannemers</a></li>
+                    <li><a href="#contact" class="btn" style="padding: 8px 15px;">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-content">
+            <h1>Straatwerk dat blijft liggen in Gouda</h1>
+            <p>Specialist in tuinen en opritten op verzakkingsgevoelige grond. <br>Wij kennen de Goudse bodem als geen ander.</p>
+            <a href="#contact" class="btn">Vraag Offerte Aan</a>
+            <a href="#particulier" class="btn btn-outline">Particulier Straatwerk</a>
+        </div>
+    </section>
+
+    <!-- USP: Het Goudse Probleem -->
+    <section class="gouda-problem">
+        <div class="container" style="display:block;">
+            <h2>Waarom verzakt alles in Gouda?</h2>
+            <p>Woont u in Bloemendaal, Plaswijck of Korte Akkeren? Dan kent u het probleem. De slappe veen- en kleigrond zorgt ervoor dat opritten verzakken en tuinen blank staan. Een standaard zandbed is hier vaak niet genoeg.</p>
+            
+            <div class="features">
+                <div class="feature-box">
+                    <h3>De Analyse</h3>
+                    <p>Wij kijken eerst naar de grondslag in uw wijk. Wij weten precies waar we extra maatregelen moeten nemen.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>De Oplossing</h3>
+                    <p>Wij werken indien nodig met lichtgewicht ophoogmaterialen (Tempex/EPS) of puinbanen om verzakking te stoppen.</p>
+                </div>
+                <div class="feature-box">
+                    <h3>De Afwatering</h3>
+                    <p>Geen plassen meer. Wij leggen drainage en kolken aan zodat het water in uw laaggelegen tuin altijd weg kan.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Diensten -->
+    <section id="particulier" class="services">
+        <div class="container" style="display:block;">
+            <div class="service-grid">
+                
+                <!-- Particulier -->
+                <div class="service-card">
+                    <h2>Particulier Straatwerk</h2>
+                    <p><strong>Focus: Tuinen & Opritten</strong></p>
+                    <p>Uw tuin is het verlengstuk van uw woning. Of u nu kiest voor strakke keramische tegels of authentieke waaltjes, wij leggen het erin.</p>
+                    <ul>
+                        <li>✅ <strong>Opritten:</strong> Verstevigde fundering tegen spoorvorming door auto's.</li>
+                        <li>✅ <strong>Tuinen:</strong> Complete aanleg, van zand tot sierbestrating.</li>
+                        <li>✅ <strong>Herstraten:</strong> Uw verzakte terras weer als nieuw.</li>
+                    </ul>
+                    <br>
+                    <a href="#contact" class="btn">Ik wil mijn tuin aanpakken</a>
+                </div>
+
+                <!-- Zakelijk / Aannemers -->
+                <div id="zakelijk" class="service-card">
+                    <h2>Voor Aannemers</h2>
+                    <p><strong>Focus: Betrouwbare Partner</strong></p>
+                    <p>Klinkers & Co is de flexibele partner voor aannemers en bouwbedrijven in de regio Gouda. Wij leveren vakwerk volgens planning.</p>
+                    <ul>
+                        <li>✅ <strong>Capaciteit:</strong> Van kleine reparaties tot grote meters.</li>
+                        <li>✅ <strong>Materieel:</strong> Eigen trilplaten, zagen en minigravers.</li>
+                        <li>✅ <strong>NEN-Normen:</strong> Wij leveren werk op dat direct goedgekeurd wordt.</li>
+                    </ul>
+                    <br>
+                    <a href="#contact" class="btn" style="background-color: #555;">Zakelijk samenwerken</a>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Call to Action / Tussenbalk -->
+    <section class="cta-bar">
+        <h2>Klaar met uw verzakte oprit?</h2>
+        <p>Stuur ons een foto via WhatsApp of mail voor een snelle inschatting.</p>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact" style="padding: 60px 0;">
+        <div class="container" style="display:block; text-align: center; max-width: 600px;">
+            <h2>Neem contact op</h2>
+            <p>Vraag vrijblijvend een offerte aan. Wij komen graag langs in Gouda en omstreken om de situatie te bekijken.</p>
+            
+            <form action="#" method="post" style="text-align: left; margin-top: 30px;">
+                <label>Naam</label>
+                <input type="text" placeholder="Uw naam">
+                
+                <label>Email of Telefoonnummer</label>
+                <input type="text" placeholder="Hoe kunnen we u bereiken?">
+                
+                <label>Wijk in Gouda (Optioneel)</label>
+                <input type="text" placeholder="Bijv. Bloemendaal, Binnenstad...">
+
+                <label>Uw vraag</label>
+                <textarea rows="5" placeholder="Beschrijf uw klus..."></textarea>
+                
+                <button type="submit" class="btn" style="width: 100%;">Verstuur Aanvraag</button>
+            </form>
+
+            <div style="margin-top: 40px;">
+                <p><strong>Klinkers & Co</strong><br>
+                Gouda<br>
+                Tel: 06 - 12345678<br>
+                Email: info@klinkersenco.nl</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container" style="display:block;">
+            <p>&copy; 2024 Klinkers & Co - Dé specialist voor straatwerk in Gouda.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
