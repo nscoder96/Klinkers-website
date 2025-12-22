@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase/client';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,48 +9,165 @@ const anthropic = new Anthropic({
 const SYSTEM_PROMPT = `Je bent de virtuele assistent van Klinkers & Co, de hovenier van Gouda en omstreken.
 
 OVER HET BEDRIJF:
-- Specialisatie: tuinaanleg, bestrating, beplanting, schuttingen, onderhoud
-- Werkgebied: Gouda en omgeving (15 km radius)
-- Bijzondere expertise: omgaan met de slappe Goudse veen- en kleigrond
-- USP: Snelle offertes (binnen 24 uur), vakwerk met 5 jaar garantie
+- Specialisatie: tuinaanleg, bestrating, beplanting, schuttingen, tuinonderhoud
+- Werkgebied: Gouda en directe omgeving (ca. 15 km radius)
+- Bijzondere expertise: werken op de lastige Goudse veen- en kleigrond (verzakkingsgevoelig)
+- USP: Persoonlijke service, snelle offertes (binnen 24 uur), vakwerk met garantie
 
-DIENSTEN EN PRIJSINDICATIES:
-- Bestrating: vanaf EUR 40/m2 (incl. materiaal en aanleg)
-- Tuinaanleg compleet: EUR 70-200/m2 afhankelijk van wensen
-- Gazon aanleggen: EUR 15-25/m2
-- Schutting plaatsen: EUR 85-150/meter
-- Haag planten: EUR 35-60/meter
-- Onderhoud: EUR 40-55/uur
+ONZE DIENSTEN:
+- Bestrating (opritten, terrassen, paden)
+- Complete tuinaanleg en tuinontwerp
+- Gazon aanleggen (graszoden of inzaaien)
+- Schuttingen en erfafscheidingen
+- Beplanting (borders, hagen, bomen)
+- Tuinonderhoud
+
+PRIJSCOMMUNICATIE - ZEER BELANGRIJK:
+- Noem ALLEEN "vanaf prijzen", nooit exacte bedragen of ranges
+- Vanaf prijzen die je mag noemen:
+  * Bestrating: vanaf €45 per m²
+  * Complete tuinaanleg: vanaf €75 per m²
+  * Gazon: vanaf €18 per m²
+  * Schutting: vanaf €90 per strekkende meter
+  * Haag planten: vanaf €40 per strekkende meter
+  * Onderhoud: vanaf €45 per uur
+- Benadruk ALTIJD dat de uiteindelijke prijs afhankelijk is van:
+  * De gekozen materialen (er is veel keuze in kwaliteit en uitstraling)
+  * De ondergrond (klei/veen vraagt soms extra fundering)
+  * De ligging en bereikbaarheid van de tuin
+- Zeg expliciet: "Voor een exacte prijs kom ik graag vrijblijvend langs"
 
 JE TAKEN:
 1. Begroet bezoekers vriendelijk en professioneel
-2. Stel vragen om de klantbehoefte te begrijpen
-3. Verzamel stap voor stap: naam, contactgegevens, type project, oppervlakte, budget-indicatie
-4. Beantwoord vragen over diensten en geef prijsindicaties
-5. Bied aan om een offerte-aanvraag door te zetten
+2. Stel vragen om de klantbehoefte te begrijpen (wat willen ze, hoe groot, wanneer)
+3. Verzamel stap voor stap: naam, contactgegevens (telefoon of email), type project, geschatte oppervlakte
+4. Beantwoord vragen over diensten, geef alleen "vanaf prijzen"
+5. Stuur aan op een vrijblijvend huisbezoek voor een exacte offerte
+
+LEAD OPSLAAN - BELANGRIJK:
+- Zodra je naam EN contactgegevens (telefoon of email) hebt, vraag dan of je de gegevens mag doorsturen
+- Als de klant "ja", "oké", "prima", "goed", "doe maar" of iets bevestigends zegt: gebruik de save_lead tool om de gegevens op te slaan
+- Als de klant "nee", "liever niet", "nog niet" zegt: sla NIETS op en respecteer dit
+- Na het opslaan: bevestig dat Niek binnen 24 uur contact opneemt
 
 GEDRAG:
-- Wees behulpzaam maar niet opdringerig
-- Geef NOOIT exacte offertes, alleen indicaties
-- Vraag altijd naar de specifieke situatie (verzakking, drainage nodig, etc.)
-- Als de klant specifieke technische vragen heeft of gefrustreerd raakt, bied aan om te bellen
+- Wees behulpzaam, vriendelijk maar niet opdringerig
+- Vraag NIET naar budget - dat is opdringerig
+- Vraag wel naar de specifieke situatie (bijv. heeft de tuin last van water? is de oprit verzakt?)
+- Bij technische vragen of als iemand gefrustreerd raakt: bied aan om te bellen
 - Houd antwoorden kort en bondig (max 2-3 zinnen per bericht)
+- Bij ongepaste berichten of spam: reageer kort en professioneel, stuur niet mee
+
+WERKGEBIED:
+- Als iemand buiten Gouda en omgeving (>15km) woont: leg uit dat we helaas alleen in de regio Gouda werken
+- Plaatsen waar we wel komen: Gouda, Waddinxveen, Boskoop, Moordrecht, Nieuwerkerk, Stolwijk, Haastrecht, Ouderkerk aan den IJssel, Bergambacht, Reeuwijk
 
 TOON:
 - Professioneel maar toegankelijk
-- Nederlands taal, informeel "u"
-- Geen jargon tenzij de klant het ook gebruikt
+- Nederlands, gebruik "u" (beleefd)
+- Geen vakjargon tenzij de klant het eerst gebruikt
+- Niet overdreven enthousiast, gewoon prettig en behulpzaam
 
 CONTACTGEGEVENS:
-- Telefoon: 06-12345678
+- Telefoon: 06 53 96 78 19
 - Email: info@klinkersenco.nl
-- Adres: Gouda
+- Locatie: Gouda`;
 
-Als je genoeg informatie hebt verzameld (naam, contact, projecttype, oppervlakte), vat het samen en vraag of je een offerte-aanvraag mag doorsturen.`;
+// Tool definition for saving leads
+const tools: Anthropic.Tool[] = [
+  {
+    name: 'save_lead',
+    description: 'Sla de klantgegevens op als lead voor opvolging. Gebruik dit ALLEEN nadat de klant toestemming heeft gegeven om de gegevens door te sturen.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Naam van de klant'
+        },
+        phone: {
+          type: 'string',
+          description: 'Telefoonnummer van de klant (indien gegeven)'
+        },
+        email: {
+          type: 'string',
+          description: 'Email van de klant (indien gegeven)'
+        },
+        city: {
+          type: 'string',
+          description: 'Woonplaats van de klant'
+        },
+        project_type: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Type project(en): bestrating, tuinaanleg, gazon, schutting, beplanting, onderhoud'
+        },
+        estimated_m2: {
+          type: 'number',
+          description: 'Geschatte oppervlakte in m2 (indien genoemd)'
+        },
+        description: {
+          type: 'string',
+          description: 'Korte samenvatting van wat de klant wil'
+        }
+      },
+      required: ['name', 'description']
+    }
+  }
+];
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+interface LeadData {
+  name: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  project_type?: string[];
+  estimated_m2?: number;
+  description: string;
+}
+
+async function saveLead(leadData: LeadData, conversationHistory: Message[]): Promise<{ success: boolean; leadId?: string; error?: string }> {
+  const supabase = createServerClient();
+
+  if (!supabase) {
+    console.log('Lead ontvangen (Supabase niet geconfigureerd):', leadData);
+    return { success: true, leadId: 'pending-setup' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('leads')
+      .insert({
+        name: leadData.name,
+        phone: leadData.phone,
+        email: leadData.email,
+        city: leadData.city || 'Onbekend',
+        project_type: leadData.project_type,
+        estimated_m2: leadData.estimated_m2,
+        description: leadData.description,
+        source: 'chat',
+        status: 'new',
+        conversation_history: conversationHistory
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log('Lead opgeslagen:', data.id);
+    return { success: true, leadId: data.id };
+  } catch (err) {
+    console.error('Lead save error:', err);
+    return { success: false, error: 'Database error' };
+  }
 }
 
 export async function POST(request: Request) {
@@ -57,23 +175,77 @@ export async function POST(request: Request) {
     const { messages } = await request.json() as { messages: Message[] };
 
     if (!process.env.ANTHROPIC_API_KEY) {
-      // Fallback response als API key niet geconfigureerd is
       return NextResponse.json({
-        message: 'Bedankt voor uw bericht! Op dit moment is onze chat in onderhoud. Neem gerust contact op via telefoon (06-12345678) of email (info@klinkersenco.nl) - we helpen u graag!'
+        message: 'Bedankt voor uw bericht! Op dit moment is onze chat in onderhoud. Neem gerust contact op via telefoon (06 53 96 78 19) of email (info@klinkersenco.nl) - we helpen u graag!'
       });
     }
 
+    // First API call - may include tool use
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 500,
+      max_tokens: 1024,
       system: SYSTEM_PROMPT,
+      tools: tools,
       messages: messages.map(m => ({
         role: m.role as 'user' | 'assistant',
         content: m.content
       }))
     });
 
-    // Extract text from response
+    // Check if the model wants to use a tool
+    if (response.stop_reason === 'tool_use') {
+      const toolUseBlock = response.content.find(block => block.type === 'tool_use');
+
+      if (toolUseBlock && toolUseBlock.type === 'tool_use' && toolUseBlock.name === 'save_lead') {
+        const leadData = toolUseBlock.input as LeadData;
+
+        // Save the lead to database
+        const saveResult = await saveLead(leadData, messages);
+
+        // Continue conversation with tool result
+        const toolResultMessages = [
+          ...messages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content
+          })),
+          {
+            role: 'assistant' as const,
+            content: response.content
+          },
+          {
+            role: 'user' as const,
+            content: [
+              {
+                type: 'tool_result' as const,
+                tool_use_id: toolUseBlock.id,
+                content: saveResult.success
+                  ? `Lead succesvol opgeslagen met ID: ${saveResult.leadId}. Bevestig aan de klant dat Niek binnen 24 uur contact opneemt.`
+                  : `Er ging iets mis bij het opslaan: ${saveResult.error}. Vraag de klant om direct te bellen naar 06 53 96 78 19.`
+              }
+            ]
+          }
+        ];
+
+        // Get final response after tool use
+        const finalResponse = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          system: SYSTEM_PROMPT,
+          tools: tools,
+          messages: toolResultMessages
+        });
+
+        const textContent = finalResponse.content.find(block => block.type === 'text');
+        const assistantMessage = textContent && 'text' in textContent ? textContent.text : 'Uw gegevens zijn opgeslagen. Niek neemt binnen 24 uur contact met u op!';
+
+        return NextResponse.json({
+          message: assistantMessage,
+          leadSaved: saveResult.success
+        });
+      }
+    }
+
+    // No tool use - just return the text response
     const textContent = response.content.find(block => block.type === 'text');
     const assistantMessage = textContent && 'text' in textContent ? textContent.text : 'Sorry, er ging iets mis.';
 
@@ -82,7 +254,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(
-      { message: 'Sorry, er ging iets mis. Probeer het opnieuw of bel ons direct op 06-12345678.' },
+      { message: 'Sorry, er ging iets mis. Probeer het opnieuw of bel ons direct op 06 53 96 78 19.' },
       { status: 500 }
     );
   }

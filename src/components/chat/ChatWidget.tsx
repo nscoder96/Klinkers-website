@@ -15,7 +15,7 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Hallo! Welkom bij Klinkers & Co. Ik help u graag met vragen over tuinaanleg, bestrating, of een offerte aanvraag. Waar kan ik u mee helpen?'
+      content: 'Goedendag! Welkom bij Klinkers & Co, uw hovenier in Gouda en omstreken. Heeft u een vraag over tuinaanleg, bestrating of wilt u een vrijblijvende offerte? Ik help u graag verder.'
     }
   ]);
   const [input, setInput] = useState('');
@@ -55,7 +55,7 @@ export default function ChatWidget() {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, er ging iets mis. Probeer het opnieuw of neem direct contact op via 06-12345678.'
+        content: 'Sorry, er ging iets mis. Probeer het opnieuw of neem direct contact op via 06 53 96 78 19.'
       }]);
     } finally {
       setIsLoading(false);
@@ -154,7 +154,7 @@ export default function ChatWidget() {
                 </Button>
               </div>
               <p className="text-xs text-gray-400 mt-2 text-center">
-                Of bel direct: <a href="tel:0612345678" className="text-orange-500 hover:underline">06-12345678</a>
+                Of bel direct: <a href="tel:0653967819" className="text-orange-500 hover:underline">06 53 96 78 19</a>
               </p>
             </div>
           </CardContent>

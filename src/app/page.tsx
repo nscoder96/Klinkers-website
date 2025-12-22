@@ -74,7 +74,7 @@ export default function Home() {
             <a href="#diensten" className="hover:text-orange-400 transition-colors">Diensten</a>
             <a href="#waarom" className="hover:text-orange-400 transition-colors">Waarom Wij</a>
             <a href="#contact" className="hover:text-orange-400 transition-colors">Contact</a>
-            <a href="tel:0612345678">
+            <a href="tel:0653967819">
               <Button className="bg-orange-500 hover:bg-orange-600 font-semibold text-white">Bel Direct</Button>
             </a>
           </nav>
@@ -364,9 +364,9 @@ export default function Home() {
             >
               Offerte Aanvragen
             </Button>
-            <a href="tel:0612345678">
+            <a href="tel:0653967819">
               <Button size="lg" variant="outline" className="text-lg px-8 border-2 border-white text-white bg-white/10 hover:bg-white hover:text-orange-500 w-full font-semibold">
-                06 - 12345678
+                06 53 96 78 19
               </Button>
             </a>
           </div>
@@ -468,8 +468,8 @@ export default function Home() {
             <p className="font-semibold text-slate-800">Klinkers & Co</p>
             <p>Gouda en omstreken</p>
             <p>
-              <a href="tel:0612345678" className="hover:text-orange-500 transition-colors">
-                Tel: 06 - 12345678
+              <a href="tel:0653967819" className="hover:text-orange-500 transition-colors">
+                Tel: 06 53 96 78 19
               </a>
             </p>
             <p>
@@ -495,7 +495,7 @@ export default function Home() {
           </a>
           <p className="mb-4">Uw hovenier in Gouda en omstreken</p>
           <div className="flex justify-center gap-4 mb-4">
-            <a href="tel:0612345678" className="hover:text-orange-400 transition-colors">
+            <a href="tel:0653967819" className="hover:text-orange-400 transition-colors">
               Bellen
             </a>
             <span>|</span>
