@@ -1,22 +1,74 @@
+'use client';
+
+import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Home() {
+  const [formData, setFormData] = useState({
+    name: '',
+    contact: '',
+    address: '',
+    description: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+
+    try {
+      const response = await fetch('/api/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.contact.includes('@') ? formData.contact : undefined,
+          phone: !formData.contact.includes('@') ? formData.contact : undefined,
+          address: formData.address,
+          description: formData.description,
+          source: 'website'
+        })
+      });
+
+      if (response.ok) {
+        setSubmitStatus('success');
+        setFormData({ name: '', contact: '', address: '', description: '' });
+      } else {
+        setSubmitStatus('error');
+      }
+    } catch {
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const scrollToContact = () => {
+    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const scrollToDiensten = () => {
+    document.getElementById('diensten')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-800 text-white">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="text-2xl font-bold">
+          <a href="/" className="text-2xl font-bold">
             <span className="text-orange-500">Klinkers</span>
             <span> & Co</span>
-          </div>
-          <nav className="hidden md:flex gap-6">
+          </a>
+          <nav className="hidden md:flex gap-6 items-center">
             <a href="#diensten" className="hover:text-orange-400 transition-colors">Diensten</a>
             <a href="#waarom" className="hover:text-orange-400 transition-colors">Waarom Wij</a>
-            <a href="#portfolio" className="hover:text-orange-400 transition-colors">Portfolio</a>
-            <a href="#contact">
-              <Button className="bg-orange-500 hover:bg-orange-600">Contact</Button>
+            <a href="#contact" className="hover:text-orange-400 transition-colors">Contact</a>
+            <a href="tel:0612345678">
+              <Button className="bg-orange-500 hover:bg-orange-600 font-semibold text-white">Bel Direct</Button>
             </a>
           </nav>
         </div>
@@ -39,11 +91,20 @@ export default function Home() {
             <span className="text-orange-400">Snelle offertes. Vakwerk gegarandeerd.</span>
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-lg px-8">
+            <Button
+              size="lg"
+              className="bg-orange-500 hover:bg-orange-600 text-lg px-8 font-semibold text-white shadow-lg"
+              onClick={scrollToContact}
+            >
               Vraag Gratis Offerte Aan
             </Button>
-            <Button size="lg" variant="outline" className="text-lg px-8 border-white text-white hover:bg-white hover:text-slate-800">
-              Bekijk Ons Werk
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-lg px-8 border-2 border-white text-white bg-white/10 hover:bg-white hover:text-slate-800 font-semibold"
+              onClick={scrollToDiensten}
+            >
+              Bekijk Onze Diensten
             </Button>
           </div>
         </div>
@@ -130,9 +191,10 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Tuinaanleg */}
             <Card className="overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center">
-                <span className="text-6xl">&#127793;</span>
-              </div>
+              <div
+                className="h-48 bg-cover bg-center"
+                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=800&q=80')" }}
+              />
               <CardHeader>
                 <CardTitle>Tuinaanleg & Ontwerp</CardTitle>
               </CardHeader>
@@ -155,17 +217,21 @@ export default function Home() {
                     <span>Hagen en bomen planten</span>
                   </li>
                 </ul>
-                <Button className="w-full mt-6 bg-green-600 hover:bg-green-700">
-                  Meer over tuinaanleg
+                <Button
+                  className="w-full mt-6 bg-green-600 hover:bg-green-700 font-semibold text-white"
+                  onClick={scrollToContact}
+                >
+                  Offerte aanvragen
                 </Button>
               </CardContent>
             </Card>
 
             {/* Bestrating */}
             <Card className="overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
-                <span className="text-6xl">&#129521;</span>
-              </div>
+              <div
+                className="h-48 bg-cover bg-center"
+                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=800&q=80')" }}
+              />
               <CardHeader>
                 <CardTitle>Bestrating & Straatwerk</CardTitle>
               </CardHeader>
@@ -188,17 +254,21 @@ export default function Home() {
                     <span>Herstraten verzakte oppervlakken</span>
                   </li>
                 </ul>
-                <Button className="w-full mt-6 bg-orange-500 hover:bg-orange-600">
-                  Meer over bestrating
+                <Button
+                  className="w-full mt-6 bg-orange-500 hover:bg-orange-600 font-semibold text-white"
+                  onClick={scrollToContact}
+                >
+                  Offerte aanvragen
                 </Button>
               </CardContent>
             </Card>
 
             {/* Schuttingen */}
             <Card className="overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center">
-                <span className="text-6xl">&#127794;</span>
-              </div>
+              <div
+                className="h-48 bg-cover bg-center"
+                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=800&q=80')" }}
+              />
               <CardHeader>
                 <CardTitle>Schuttingen & Afscheidingen</CardTitle>
               </CardHeader>
@@ -221,17 +291,21 @@ export default function Home() {
                     <span>Privacy schermen</span>
                   </li>
                 </ul>
-                <Button className="w-full mt-6 bg-amber-600 hover:bg-amber-700">
-                  Meer over schuttingen
+                <Button
+                  className="w-full mt-6 bg-amber-600 hover:bg-amber-700 font-semibold text-white"
+                  onClick={scrollToContact}
+                >
+                  Offerte aanvragen
                 </Button>
               </CardContent>
             </Card>
 
             {/* Onderhoud */}
             <Card className="overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center">
-                <span className="text-6xl">&#9986;</span>
-              </div>
+              <div
+                className="h-48 bg-cover bg-center"
+                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=800&q=80')" }}
+              />
               <CardHeader>
                 <CardTitle>Tuinonderhoud</CardTitle>
               </CardHeader>
@@ -254,8 +328,11 @@ export default function Home() {
                     <span>Bladruimen en winterklaar maken</span>
                   </li>
                 </ul>
-                <Button className="w-full mt-6 bg-slate-600 hover:bg-slate-700">
-                  Meer over onderhoud
+                <Button
+                  className="w-full mt-6 bg-slate-600 hover:bg-slate-700 font-semibold text-white"
+                  onClick={scrollToContact}
+                >
+                  Offerte aanvragen
                 </Button>
               </CardContent>
             </Card>
@@ -273,12 +350,18 @@ export default function Home() {
             Stuur ons een bericht of bel direct. Wij komen graag langs voor een vrijblijvend adviesgesprek.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-white text-orange-500 hover:bg-gray-100 text-lg px-8">
+            <Button
+              size="lg"
+              className="bg-white text-orange-500 hover:bg-gray-100 text-lg px-8 font-semibold shadow-lg"
+              onClick={scrollToContact}
+            >
               Offerte Aanvragen
             </Button>
-            <Button size="lg" variant="outline" className="text-lg px-8 border-white text-white hover:bg-white hover:text-orange-500">
-              06 - 12345678
-            </Button>
+            <a href="tel:0612345678">
+              <Button size="lg" variant="outline" className="text-lg px-8 border-2 border-white text-white bg-white/10 hover:bg-white hover:text-orange-500 w-full font-semibold">
+                06 - 12345678
+              </Button>
+            </a>
           </div>
         </div>
       </section>
@@ -295,55 +378,98 @@ export default function Home() {
 
           <Card>
             <CardContent className="pt-6">
-              <form className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {submitStatus === 'success' ? (
+                <div className="text-center py-8">
+                  <div className="text-green-500 text-5xl mb-4">&#10003;</div>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">Bedankt voor uw aanvraag!</h3>
+                  <p className="text-gray-600 mb-4">We nemen zo snel mogelijk contact met u op.</p>
+                  <Button
+                    onClick={() => setSubmitStatus('idle')}
+                    variant="outline"
+                  >
+                    Nieuwe aanvraag
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Naam *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        placeholder="Uw naam"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Telefoon / Email *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.contact}
+                        onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                        className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        placeholder="Hoe kunnen we u bereiken?"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Naam *</label>
+                    <label className="block text-sm font-medium mb-1">Adres / Wijk</label>
                     <input
                       type="text"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                      placeholder="Uw naam"
+                      placeholder="Bijv. Bloemendaal, Gouda"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Telefoon / Email *</label>
-                    <input
-                      type="text"
-                      className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                      placeholder="Hoe kunnen we u bereiken?"
-                    />
+                    <label className="block text-sm font-medium mb-1">Wat kunnen we voor u doen? *</label>
+                    <textarea
+                      required
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 min-h-32"
+                      placeholder="Beschrijf uw project of vraag..."
+                    ></textarea>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Adres / Wijk</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                    placeholder="Bijv. Bloemendaal, Gouda"
-                  />
-                </div>
+                  {submitStatus === 'error' && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+                      Er ging iets mis. Probeer het opnieuw of bel ons direct.
+                    </div>
+                  )}
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Wat kunnen we voor u doen? *</label>
-                  <textarea
-                    className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 min-h-32"
-                    placeholder="Beschrijf uw project of vraag..."
-                  ></textarea>
-                </div>
-
-                <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-lg py-6">
-                  Verstuur Aanvraag
-                </Button>
-              </form>
+                  <Button
+                    type="submit"
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-lg py-6 font-semibold text-white shadow-md"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Versturen...' : 'Verstuur Aanvraag'}
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
 
           <div className="mt-8 text-center text-gray-600">
             <p className="font-semibold text-slate-800">Klinkers & Co</p>
             <p>Gouda en omstreken</p>
-            <p>Tel: 06 - 12345678</p>
-            <p>Email: info@klinkersenco.nl</p>
+            <p>
+              <a href="tel:0612345678" className="hover:text-orange-500 transition-colors">
+                Tel: 06 - 12345678
+              </a>
+            </p>
+            <p>
+              <a href="mailto:info@klinkersenco.nl" className="hover:text-orange-500 transition-colors">
+                Email: info@klinkersenco.nl
+              </a>
+            </p>
           </div>
         </div>
       </section>
@@ -351,11 +477,24 @@ export default function Home() {
       {/* Footer */}
       <footer className="bg-slate-800 text-gray-300 py-8">
         <div className="container mx-auto px-4 text-center">
-          <div className="text-2xl font-bold mb-4">
+          <a href="/" className="text-2xl font-bold mb-4 inline-block">
             <span className="text-orange-500">Klinkers</span>
             <span className="text-white"> & Co</span>
-          </div>
+          </a>
           <p className="mb-4">Uw hovenier in Gouda en omstreken</p>
+          <div className="flex justify-center gap-4 mb-4">
+            <a href="tel:0612345678" className="hover:text-orange-400 transition-colors">
+              Bellen
+            </a>
+            <span>|</span>
+            <a href="mailto:info@klinkersenco.nl" className="hover:text-orange-400 transition-colors">
+              E-mail
+            </a>
+            <span>|</span>
+            <a href="#contact" className="hover:text-orange-400 transition-colors">
+              Contact
+            </a>
+          </div>
           <p className="text-sm text-gray-500">
             &copy; 2025 Klinkers & Co - Specialist in tuinaanleg en bestrating
           </p>
