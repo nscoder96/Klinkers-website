@@ -60,13 +60,13 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-800 text-white">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="flex items-center">
+          <a href="/" className="flex items-center bg-white rounded-md px-3 py-1">
             <Image
               src="/logo.png"
               alt="Klinkers & Co"
               width={180}
               height={50}
-              className="h-10 w-auto"
+              className="h-8 w-auto"
               priority
             />
           </a>
@@ -484,13 +484,13 @@ export default function Home() {
       {/* Footer */}
       <footer className="bg-slate-800 text-gray-300 py-8">
         <div className="container mx-auto px-4 text-center">
-          <a href="/" className="inline-block mb-4">
+          <a href="/" className="inline-block mb-4 bg-white rounded-md px-4 py-2">
             <Image
               src="/logo.png"
               alt="Klinkers & Co"
               width={160}
               height={45}
-              className="h-12 w-auto"
+              className="h-10 w-auto"
             />
           </a>
           <p className="mb-4">Uw hovenier in Gouda en omstreken</p>
