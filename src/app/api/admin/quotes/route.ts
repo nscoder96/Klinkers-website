@@ -34,6 +34,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Kon offerte niet aanmaken' }, { status: 500 });
     }
 
+    // Log to quote_history
+    await supabase.from('quote_history').insert({
+      quote_id: data.id,
+      change_type: 'created',
+      old_data: null,
+      new_data: {
+        quote_number: data.quote_number,
+        project_description: data.project_description,
+        project_address: data.project_address,
+        line_items: data.line_items,
+        subtotal: data.subtotal,
+        total: data.total,
+        status: data.status
+      },
+      change_summary: `Offerte ${data.quote_number} aangemaakt (€${data.total.toFixed(2)})`
+    });
+
+    // Log to lead activities
+    await supabase.from('lead_activities').insert({
+      lead_id: body.lead_id,
+      activity_type: 'quote_created',
+      title: 'Offerte aangemaakt',
+      description: `Offerte ${data.quote_number} - €${data.total.toFixed(2)}`
+    });
+
     // Update lead status
     await supabase
       .from('leads')
@@ -57,7 +82,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('quotes')
-      .select('*, leads(name, phone, email)')
+      .select('*, leads(name, city)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -65,7 +90,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Kon offertes niet ophalen' }, { status: 500 });
     }
 
-    return NextResponse.json({ quotes: data });
+    // Map the data to include lead_name and lead_city at top level
+    const quotesWithLeadInfo = data?.map(quote => ({
+      ...quote,
+      lead_name: quote.leads?.name,
+      lead_city: quote.leads?.city,
+    })) || [];
+
+    return NextResponse.json({ quotes: quotesWithLeadInfo });
   } catch (error) {
     console.error('Quotes API error:', error);
     return NextResponse.json({ error: 'Er ging iets mis' }, { status: 500 });

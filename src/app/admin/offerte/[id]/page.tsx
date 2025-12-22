@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdminAuth } from '@/lib/useAdminAuth';
+import { Lightbulb, Ruler, ArrowLeft, FileEdit } from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -37,12 +38,31 @@ interface LineItem {
   unit: string;
   unit_price: number;
   total: number;
+  reasoning?: string;
+  is_new?: boolean;
+}
+
+interface ExistingQuote {
+  id: string;
+  quote_number: string;
+  project_description: string | null;
+  project_address: string | null;
+  valid_until: string | null;
+  line_items: LineItem[];
+  subtotal: number;
+  btw_percentage: number;
+  btw_amount: number;
+  total: number;
+  customer_notes: string | null;
+  status: string;
 }
 
 export default function OfferteMaker() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const leadId = params.id as string;
+  const quoteId = searchParams.get('quoteId');
   const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
 
   const [lead, setLead] = useState<Lead | null>(null);
@@ -52,36 +72,52 @@ export default function OfferteMaker() {
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
 
+  // Editing mode state
+  const [existingQuote, setExistingQuote] = useState<ExistingQuote | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
   const [projectDescription, setProjectDescription] = useState('');
   const [projectAddress, setProjectAddress] = useState('');
   const [validDays, setValidDays] = useState(30);
   const [notes, setNotes] = useState('');
   const [kladNotities, setKladNotities] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchData();
     }
-  }, [leadId, isAuthenticated]);
+  }, [leadId, quoteId, isAuthenticated]);
 
   const fetchData = async () => {
     try {
-      const [leadsRes, pricingRes] = await Promise.all([
+      // Build fetch requests array
+      const fetchPromises: Promise<Response>[] = [
         fetch('/api/admin/leads'),
         fetch('/api/admin/pricing')
-      ]);
+      ];
+
+      // If editing an existing quote, fetch it too
+      if (quoteId) {
+        fetchPromises.push(fetch(`/api/admin/quotes/${quoteId}`));
+      }
+
+      const responses = await Promise.all(fetchPromises);
+      const [leadsRes, pricingRes, quoteRes] = responses;
 
       if (leadsRes.ok) {
         const leadsData = await leadsRes.json();
         const foundLead = leadsData.leads.find((l: Lead) => l.id === leadId);
         if (foundLead) {
           setLead(foundLead);
-          setProjectAddress(foundLead.address || `${foundLead.city}`);
-          setProjectDescription(foundLead.description || '');
-          // Pre-fill klad notities with lead description
-          if (foundLead.description) {
-            setKladNotities(foundLead.description + (foundLead.estimated_m2 ? `\n\nGeschat: ${foundLead.estimated_m2} m2` : ''));
+          // Only set defaults if NOT editing
+          if (!quoteId) {
+            setProjectAddress(foundLead.address || `${foundLead.city}`);
+            setProjectDescription(foundLead.description || '');
+            if (foundLead.description) {
+              setKladNotities(foundLead.description + (foundLead.estimated_m2 ? `\n\nGeschat: ${foundLead.estimated_m2} m2` : ''));
+            }
           }
         }
       }
@@ -89,6 +125,35 @@ export default function OfferteMaker() {
       if (pricingRes.ok) {
         const pricingData = await pricingRes.json();
         setPricing(pricingData.pricing);
+      }
+
+      // Load existing quote data if editing
+      if (quoteRes && quoteRes.ok) {
+        const quoteData = await quoteRes.json();
+        const quote = quoteData.quote;
+        if (quote) {
+          setExistingQuote(quote);
+          setIsEditing(true);
+          // Populate form with existing quote data
+          setProjectDescription(quote.project_description || '');
+          setProjectAddress(quote.project_address || '');
+          setNotes(quote.customer_notes || '');
+          // Load line items
+          if (quote.line_items && Array.isArray(quote.line_items)) {
+            setLineItems(quote.line_items.map((item: LineItem) => ({
+              ...item,
+              id: item.id || crypto.randomUUID(),
+              total: item.quantity * item.unit_price
+            })));
+          }
+          // Calculate valid days from valid_until
+          if (quote.valid_until) {
+            const validUntil = new Date(quote.valid_until);
+            const now = new Date();
+            const daysRemaining = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            setValidDays(Math.max(daysRemaining, 1));
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -105,6 +170,7 @@ export default function OfferteMaker() {
 
     setAnalyzing(true);
     setAiAnalysis('');
+    setAiSuggestions([]);
 
     try {
       const response = await fetch('/api/admin/analyze-notes', {
@@ -117,9 +183,14 @@ export default function OfferteMaker() {
         const data = await response.json();
         setAiAnalysis(data.analysis);
         setLineItems(data.lineItems);
+        setAiSuggestions(data.suggestions || []);
         // Update project description with analysis
         if (data.analysis) {
           setProjectDescription(data.analysis);
+        }
+        // Show notification if new items were added to pricing database
+        if (data.newItemsAdded && data.newItemsAdded.length > 0) {
+          alert(`${data.newItemsAdded.length} nieuwe prijsitem(s) toegevoegd aan je prijslijst:\n\n• ${data.newItemsAdded.join('\n• ')}\n\nDeze kun je terugvinden en aanpassen in Prijzen beheer.`);
         }
       } else {
         const error = await response.json();
@@ -178,28 +249,56 @@ export default function OfferteMaker() {
 
     setSaving(true);
     try {
-      const response = await fetch('/api/admin/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lead_id: lead.id,
-          quote_number: generateQuoteNumber(),
-          project_description: projectDescription,
-          project_address: projectAddress,
-          valid_until: new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          line_items: lineItems,
-          subtotal,
-          btw_percentage: 21,
-          btw_amount: btwAmount,
-          total,
-          customer_notes: notes,
-          status: 'draft'
-        })
-      });
+      const quoteData = {
+        lead_id: lead.id,
+        project_description: projectDescription,
+        project_address: projectAddress,
+        valid_until: new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        line_items: lineItems,
+        subtotal,
+        btw_percentage: 21,
+        btw_amount: btwAmount,
+        total,
+        customer_notes: notes,
+      };
+
+      let response: Response;
+
+      if (isEditing && existingQuote) {
+        // Update existing quote
+        response = await fetch(`/api/admin/quotes/${existingQuote.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...quoteData,
+            // Include old data for history tracking
+            _old_data: {
+              project_description: existingQuote.project_description,
+              project_address: existingQuote.project_address,
+              line_items: existingQuote.line_items,
+              subtotal: existingQuote.subtotal,
+              total: existingQuote.total,
+              customer_notes: existingQuote.customer_notes,
+            }
+          })
+        });
+      } else {
+        // Create new quote
+        response = await fetch('/api/admin/quotes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...quoteData,
+            quote_number: generateQuoteNumber(),
+            status: 'draft'
+          })
+        });
+      }
 
       if (response.ok) {
-        alert('Offerte opgeslagen!');
-        router.push('/admin');
+        const result = await response.json();
+        alert(isEditing ? 'Offerte bijgewerkt!' : 'Offerte opgeslagen!');
+        router.push(`/admin/offertes/${result.quote.id}`);
       } else {
         alert('Er ging iets mis bij het opslaan');
       }
@@ -254,10 +353,19 @@ export default function OfferteMaker() {
       <header className="bg-slate-800 text-white py-4">
         <div className="container mx-auto px-4 flex justify-between items-center">
           <div>
-            <Link href="/admin" className="text-sm text-gray-300 hover:text-white">
-              &larr; Terug naar overzicht
+            <Link
+              href={isEditing && existingQuote ? `/admin/offertes/${existingQuote.id}` : '/admin'}
+              className="text-sm text-gray-300 hover:text-white flex items-center gap-1"
+            >
+              <ArrowLeft className="w-4 h-4" /> {isEditing ? 'Terug naar offerte' : 'Terug naar overzicht'}
             </Link>
-            <h1 className="text-2xl font-bold">Offerte maken voor {lead.name}</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              {isEditing && <FileEdit className="w-6 h-6" />}
+              {isEditing ? `Offerte ${existingQuote?.quote_number} bewerken` : `Offerte maken voor ${lead.name}`}
+            </h1>
+            {isEditing && (
+              <p className="text-sm text-slate-300">Klant: {lead.name}</p>
+            )}
           </div>
         </div>
       </header>
@@ -302,6 +410,22 @@ Klant wil nieuwe tuin van 6x8 meter
                   <div className="mt-4 p-3 bg-white rounded-lg border">
                     <p className="text-sm font-medium text-gray-700">AI Analyse:</p>
                     <p className="text-sm text-gray-600">{aiAnalysis}</p>
+                  </div>
+                )}
+
+                {aiSuggestions.length > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4" /> Suggesties:
+                    </p>
+                    <ul className="space-y-1">
+                      {aiSuggestions.map((suggestion, i) => (
+                        <li key={i} className="text-sm text-blue-600 flex items-start gap-2">
+                          <span>•</span>
+                          <span>{suggestion}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </CardContent>
@@ -400,6 +524,11 @@ Klant wil nieuwe tuin van 6x8 meter
                             </p>
                           </div>
                         </div>
+                        {item.reasoning && (
+                          <p className="mt-2 text-xs text-gray-500 italic bg-gray-50 p-2 rounded flex items-start gap-2">
+                            <Ruler className="w-3 h-3 mt-0.5 flex-shrink-0" /> {item.reasoning}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -453,7 +582,7 @@ Klant wil nieuwe tuin van 6x8 meter
                   disabled={lineItems.length === 0 || saving}
                   className="w-full bg-green-600 hover:bg-green-700 text-lg py-6"
                 >
-                  {saving ? 'Opslaan...' : `Offerte opslaan (€${total.toFixed(2)})`}
+                  {saving ? 'Opslaan...' : `${isEditing ? 'Wijzigingen opslaan' : 'Offerte opslaan'} (€${total.toFixed(2)})`}
                 </Button>
               </CardContent>
             </Card>

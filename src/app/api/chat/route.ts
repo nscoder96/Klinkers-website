@@ -40,14 +40,16 @@ PRIJSCOMMUNICATIE - ZEER BELANGRIJK:
 JE TAKEN:
 1. Begroet bezoekers vriendelijk en professioneel
 2. Stel vragen om de klantbehoefte te begrijpen (wat willen ze, hoe groot, wanneer)
-3. Verzamel stap voor stap: naam, contactgegevens (telefoon of email), type project, geschatte oppervlakte
-4. Beantwoord vragen over diensten, geef alleen "vanaf prijzen"
-5. Stuur aan op een vrijblijvend huisbezoek voor een exacte offerte
+3. BELANGRIJK: Naam en contactgegevens zijn al verzameld via het formulier voordat de chat start. Je hoeft hier NIET meer naar te vragen!
+4. Verzamel aanvullende info: woonplaats, type project, geschatte oppervlakte, wanneer ze willen starten
+5. Beantwoord vragen over diensten, geef alleen "vanaf prijzen"
+6. Stuur aan op een vrijblijvend huisbezoek voor een exacte offerte
 
 LEAD OPSLAAN - BELANGRIJK:
-- Zodra je naam EN contactgegevens (telefoon of email) hebt, vraag dan of je de gegevens mag doorsturen
-- Leg ALTIJD uit WAAROM we gegevens vragen: "Uw gegevens gebruiken wij uitsluitend om contact met u op te nemen over uw project. Wij sturen geen reclame of nieuwsbrieven - uw gegevens zijn puur voor het soepele verloop van deze aanvraag."
+- De klant heeft al naam en contactgegevens ingevuld via het formulier voordat de chat startte
+- Zodra je voldoende projectinformatie hebt (woonplaats, type werk, oppervlakte), vraag dan of je de gegevens mag doorsturen zodat Niek contact kan opnemen
 - Als de klant "ja", "oké", "prima", "goed", "doe maar" of iets bevestigends zegt: gebruik de save_lead tool om de gegevens op te slaan
+- De naam en telefoon/email worden automatisch toegevoegd vanuit het formulier - jij hoeft alleen de projectdetails toe te voegen
 - Als de klant "nee", "liever niet", "nog niet" zegt: sla NIETS op en respecteer dit volledig
 - Na het opslaan: bevestig dat Niek binnen 24 uur contact opneemt voor een vrijblijvend gesprek
 
@@ -125,6 +127,12 @@ interface Message {
   content: string;
 }
 
+interface ContactInfo {
+  name: string;
+  contact: string;
+  contactType: 'phone' | 'email';
+}
+
 interface LeadData {
   name: string;
   phone?: string;
@@ -135,7 +143,11 @@ interface LeadData {
   description: string;
 }
 
-async function saveLead(leadData: LeadData, conversationHistory: Message[]): Promise<{ success: boolean; leadId?: string; error?: string }> {
+async function saveLead(
+  leadData: LeadData,
+  conversationHistory: Message[],
+  contactInfo?: ContactInfo
+): Promise<{ success: boolean; leadId?: string; error?: string }> {
   const supabase = createServerClient();
 
   if (!supabase) {
@@ -143,13 +155,19 @@ async function saveLead(leadData: LeadData, conversationHistory: Message[]): Pro
     return { success: true, leadId: 'pending-setup' };
   }
 
+  // Merge contact info from form with AI-collected data
+  // Form data takes precedence since it's validated
+  const phone = contactInfo?.contactType === 'phone' ? contactInfo.contact : leadData.phone;
+  const email = contactInfo?.contactType === 'email' ? contactInfo.contact : leadData.email;
+  const name = contactInfo?.name || leadData.name;
+
   try {
     const { data, error } = await supabase
       .from('leads')
       .insert({
-        name: leadData.name,
-        phone: leadData.phone,
-        email: leadData.email,
+        name: name,
+        phone: phone,
+        email: email,
         city: leadData.city || 'Onbekend',
         project_type: leadData.project_type,
         estimated_m2: leadData.estimated_m2,
@@ -176,7 +194,10 @@ async function saveLead(leadData: LeadData, conversationHistory: Message[]): Pro
 
 export async function POST(request: Request) {
   try {
-    const { messages } = await request.json() as { messages: Message[] };
+    const { messages, contactInfo } = await request.json() as {
+      messages: Message[];
+      contactInfo?: ContactInfo;
+    };
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({
@@ -203,8 +224,8 @@ export async function POST(request: Request) {
       if (toolUseBlock && toolUseBlock.type === 'tool_use' && toolUseBlock.name === 'save_lead') {
         const leadData = toolUseBlock.input as LeadData;
 
-        // Save the lead to database
-        const saveResult = await saveLead(leadData, messages);
+        // Save the lead to database (with contact info from form)
+        const saveResult = await saveLead(leadData, messages, contactInfo);
 
         // Continue conversation with tool result
         const toolResultMessages = [
