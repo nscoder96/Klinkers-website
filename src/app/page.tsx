@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -59,9 +60,15 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-800 text-white">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <a href="/" className="text-2xl font-bold">
-            <span className="text-orange-500">Klinkers</span>
-            <span> & Co</span>
+          <a href="/" className="flex items-center">
+            <Image
+              src="/logo.png"
+              alt="Klinkers & Co"
+              width={180}
+              height={50}
+              className="h-10 w-auto"
+              priority
+            />
           </a>
           <nav className="hidden md:flex gap-6 items-center">
             <a href="#diensten" className="hover:text-orange-400 transition-colors">Diensten</a>
@@ -477,9 +484,14 @@ export default function Home() {
       {/* Footer */}
       <footer className="bg-slate-800 text-gray-300 py-8">
         <div className="container mx-auto px-4 text-center">
-          <a href="/" className="text-2xl font-bold mb-4 inline-block">
-            <span className="text-orange-500">Klinkers</span>
-            <span className="text-white"> & Co</span>
+          <a href="/" className="inline-block mb-4">
+            <Image
+              src="/logo.png"
+              alt="Klinkers & Co"
+              width={160}
+              height={45}
+              className="h-12 w-auto"
+            />
           </a>
           <p className="mb-4">Uw hovenier in Gouda en omstreken</p>
           <div className="flex justify-center gap-4 mb-4">
