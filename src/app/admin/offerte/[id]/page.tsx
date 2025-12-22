@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useAdminAuth } from '@/lib/useAdminAuth';
 
 interface Lead {
   id: string;
@@ -42,6 +43,7 @@ export default function OfferteMaker() {
   const params = useParams();
   const router = useRouter();
   const leadId = params.id as string;
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
 
   const [lead, setLead] = useState<Lead | null>(null);
   const [pricing, setPricing] = useState<PricingItem[]>([]);
@@ -58,8 +60,10 @@ export default function OfferteMaker() {
   const [aiAnalysis, setAiAnalysis] = useState('');
 
   useEffect(() => {
-    fetchData();
-  }, [leadId]);
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [leadId, isAuthenticated]);
 
   const fetchData = async () => {
     try {
@@ -224,12 +228,16 @@ export default function OfferteMaker() {
     onderhoud: 'Onderhoud'
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-gray-500">Laden...</p>
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect to login
   }
 
   if (!lead) {

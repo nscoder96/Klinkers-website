@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
 
 interface Lead {
   id: string;
@@ -20,13 +21,16 @@ interface Lead {
 }
 
 export default function AdminDashboard() {
+  const { isAuthenticated, isLoading: authLoading, logout } = useAdminAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetchLeads();
-  }, []);
+    if (isAuthenticated) {
+      fetchLeads();
+    }
+  }, [isAuthenticated]);
 
   const fetchLeads = async () => {
     try {
@@ -82,7 +86,7 @@ export default function AdminDashboard() {
     });
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-gray-500">Laden...</p>
@@ -90,12 +94,24 @@ export default function AdminDashboard() {
     );
   }
 
+  if (!isAuthenticated) {
+    return null; // Will redirect to login
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-slate-800 text-white py-4">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">Klinkers & Co - Admin</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={logout}
+            className="text-white border-white hover:bg-white hover:text-slate-800"
+          >
+            Uitloggen
+          </Button>
         </div>
       </header>
 
