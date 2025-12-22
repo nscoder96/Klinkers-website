@@ -1,20 +1,41 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-// Generate a secure token
-function generateToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+// Simple token verification using HMAC
+function createToken(password: string, secret: string): string {
+  const timestamp = Date.now();
+  const data = `${password}:${timestamp}`;
+  const signature = crypto.createHmac('sha256', secret).update(data).digest('hex');
+  // Token format: timestamp.signature
+  return Buffer.from(`${timestamp}.${signature}`).toString('base64');
 }
 
-// Store valid tokens (in production, use Redis or database)
-// For simplicity, we use a module-level variable
-const validTokens = new Set<string>();
+function verifyToken(token: string, password: string, secret: string): boolean {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf-8');
+    const [timestampStr, signature] = decoded.split('.');
+    const timestamp = parseInt(timestampStr, 10);
+
+    // Token expires after 7 days
+    const maxAge = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - timestamp > maxAge) {
+      return false;
+    }
+
+    // Verify signature
+    const expectedSignature = crypto.createHmac('sha256', secret).update(`${password}:${timestamp}`).digest('hex');
+    return signature === expectedSignature;
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(request: Request) {
   try {
     const { password } = await request.json();
 
     const adminPassword = process.env.ADMIN_PASSWORD;
+    const secret = process.env.ADMIN_SECRET || adminPassword || 'fallback-secret-key';
 
     if (!adminPassword) {
       console.error('ADMIN_PASSWORD not configured');
@@ -22,15 +43,7 @@ export async function POST(request: Request) {
     }
 
     if (password === adminPassword) {
-      const token = generateToken();
-      validTokens.add(token);
-
-      // Clean up old tokens (keep max 10)
-      if (validTokens.size > 10) {
-        const tokensArray = Array.from(validTokens);
-        validTokens.delete(tokensArray[0]);
-      }
-
+      const token = createToken(adminPassword, secret);
       return NextResponse.json({ token });
     }
 
@@ -46,9 +59,16 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.replace('Bearer ', '');
 
-  if (!token || !validTokens.has(token)) {
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  const secret = process.env.ADMIN_SECRET || adminPassword || 'fallback-secret-key';
+
+  if (!token || !adminPassword) {
     return NextResponse.json({ valid: false }, { status: 401 });
   }
 
-  return NextResponse.json({ valid: true });
+  if (verifyToken(token, adminPassword, secret)) {
+    return NextResponse.json({ valid: true });
+  }
+
+  return NextResponse.json({ valid: false }, { status: 401 });
 }
