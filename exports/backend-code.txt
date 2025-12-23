@@ -1,0 +1,3757 @@
+===========================================
+KLINKERS & CO - BACKEND/ADMIN CODE VOOR UI/UX REVIEW
+===========================================
+
+Dit is de admin backend voor een hoveniersbedrijf.
+Bevat: Dashboard, Leads beheer, Offertes, Planning, Prijzen, Projecten
+
+Technologie: Next.js 15, React, Tailwind CSS, shadcn/ui, Supabase
+
+===========================================
+FILE: src/app/admin/page.tsx (Dashboard)
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+import { Users, FileText, Calendar, Euro, ChevronRight } from 'lucide-react';
+
+interface Lead {
+  id: string;
+  name: string;
+  city: string;
+  status: string;
+  created_at: string;
+  source: string;
+}
+
+interface Quote {
+  id: string;
+  quote_number: string;
+  total: number;
+  status: string;
+  created_at: string;
+  lead_id: string;
+}
+
+interface DashboardStats {
+  leads: {
+    total: number;
+    new: number;
+    contacted: number;
+    quote_sent: number;
+    won: number;
+    lost: number;
+  };
+  quotes: {
+    total: number;
+    draft: number;
+    sent: number;
+    accepted: number;
+    declined: number;
+    totalValue: number;
+    acceptedValue: number;
+  };
+  conversion: {
+    leadToQuote: number;
+    quoteToWon: number;
+  };
+}
+
+export default function AdminDashboard() {
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [isAuthenticated]);
+
+  const fetchData = async () => {
+    try {
+      const [leadsRes, quotesRes] = await Promise.all([
+        fetch('/api/admin/leads'),
+        fetch('/api/admin/quotes')
+      ]);
+
+      if (leadsRes.ok) {
+        const data = await leadsRes.json();
+        setLeads(data.leads || []);
+      }
+
+      if (quotesRes.ok) {
+        const data = await quotesRes.json();
+        setQuotes(data.quotes || []);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate statistics
+  const stats: DashboardStats = {
+    leads: {
+      total: leads.length,
+      new: leads.filter(l => l.status === 'new').length,
+      contacted: leads.filter(l => l.status === 'contacted').length,
+      quote_sent: leads.filter(l => l.status === 'quote_sent').length,
+      won: leads.filter(l => l.status === 'won').length,
+      lost: leads.filter(l => l.status === 'lost').length,
+    },
+    quotes: {
+      total: quotes.length,
+      draft: quotes.filter(q => q.status === 'draft').length,
+      sent: quotes.filter(q => q.status === 'sent').length,
+      accepted: quotes.filter(q => q.status === 'accepted').length,
+      declined: quotes.filter(q => q.status === 'declined').length,
+      totalValue: quotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0),
+      acceptedValue: quotes.filter(q => q.status === 'accepted').reduce((sum, q) => sum + (Number(q.total) || 0), 0),
+    },
+    conversion: {
+      leadToQuote: leads.length > 0 ? (quotes.length / leads.length) * 100 : 0,
+      quoteToWon: quotes.length > 0 ? (quotes.filter(q => q.status === 'accepted').length / quotes.length) * 100 : 0,
+    }
+  };
+
+  const recentLeads = [...leads]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      new: 'bg-blue-100 text-blue-800',
+      contacted: 'bg-yellow-100 text-yellow-800',
+      site_visit_scheduled: 'bg-purple-100 text-purple-800',
+      quote_sent: 'bg-orange-100 text-orange-800',
+      won: 'bg-green-100 text-green-800',
+      lost: 'bg-red-100 text-red-800',
+      dormant: 'bg-gray-100 text-gray-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      new: 'Nieuw',
+      contacted: 'Gecontacteerd',
+      site_visit_scheduled: 'Afspraak gepland',
+      quote_sent: 'Offerte verstuurd',
+      negotiating: 'In onderhandeling',
+      won: 'Gewonnen',
+      lost: 'Verloren',
+      dormant: 'Slapend',
+    };
+    return labels[status] || status;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('nl-NL', {
+      day: 'numeric',
+      month: 'short',
+    });
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500">Overzicht van je bedrijf</p>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-3xl font-bold text-blue-600">{stats.leads.new}</p>
+              <p className="text-sm text-blue-700">Nieuwe leads</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-yellow-50 border-yellow-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-3xl font-bold text-yellow-600">{stats.leads.contacted}</p>
+              <p className="text-sm text-yellow-700">Gecontacteerd</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-orange-50 border-orange-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-3xl font-bold text-orange-600">{stats.quotes.sent}</p>
+              <p className="text-sm text-orange-700">Offertes open</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-3xl font-bold text-green-600">{stats.leads.won}</p>
+              <p className="text-sm text-green-700">Gewonnen</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-purple-50 border-purple-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-3xl font-bold text-purple-600">{stats.conversion.leadToQuote.toFixed(0)}%</p>
+              <p className="text-sm text-purple-700">Lead → Offerte</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-emerald-50 border-emerald-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-3xl font-bold text-emerald-600">{stats.conversion.quoteToWon.toFixed(0)}%</p>
+              <p className="text-sm text-emerald-700">Offerte → Won</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Revenue Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Totale waarde offertes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">€{stats.quotes.totalValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Geaccepteerde offertes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-green-600">€{stats.quotes.acceptedValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Totaal leads</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{stats.leads.total}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Leads & Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Leads */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Recente Leads</CardTitle>
+              <Link href="/admin/leads">
+                <Button variant="outline" size="sm">Alle leads</Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {recentLeads.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Nog geen leads</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentLeads.map((lead) => (
+                    <Link
+                      key={lead.id}
+                      href={`/admin/leads/${lead.id}`}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                    >
+                      <div>
+                        <p className="font-medium">{lead.name}</p>
+                        <p className="text-sm text-gray-500">{lead.city} • {formatDate(lead.created_at)}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                        {getStatusLabel(lead.status)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Snelle Acties</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Link href="/admin/leads" className="block">
+                <Button className="w-full justify-start bg-blue-500 hover:bg-blue-600">
+                  <Users className="w-4 h-4 mr-2" />
+                  Bekijk alle leads ({stats.leads.total})
+                </Button>
+              </Link>
+              <Link href="/admin/offertes" className="block">
+                <Button className="w-full justify-start bg-orange-500 hover:bg-orange-600">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Bekijk alle offertes ({stats.quotes.total})
+                </Button>
+              </Link>
+              <Link href="/admin/planning" className="block">
+                <Button className="w-full justify-start bg-purple-500 hover:bg-purple-600">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Planning bekijken
+                </Button>
+              </Link>
+              <Link href="/admin/prijzen" className="block">
+                <Button className="w-full justify-start bg-emerald-500 hover:bg-emerald-600">
+                  <Euro className="w-4 h-4 mr-2" />
+                  Prijzen beheren
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Pipeline Overview */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Lead Pipeline</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {[
+                { status: 'new', label: 'Nieuw', color: 'bg-blue-500' },
+                { status: 'contacted', label: 'Gecontacteerd', color: 'bg-yellow-500' },
+                { status: 'site_visit_scheduled', label: 'Afspraak', color: 'bg-purple-500' },
+                { status: 'quote_sent', label: 'Offerte', color: 'bg-orange-500' },
+                { status: 'negotiating', label: 'Onderhandeling', color: 'bg-pink-500' },
+                { status: 'won', label: 'Gewonnen', color: 'bg-green-500' },
+                { status: 'lost', label: 'Verloren', color: 'bg-red-500' },
+              ].map((stage, index) => {
+                const count = leads.filter(l => l.status === stage.status).length;
+                return (
+                  <div key={stage.status} className="flex items-center">
+                    <div className="flex flex-col items-center min-w-[100px]">
+                      <div className={`w-12 h-12 rounded-full ${stage.color} flex items-center justify-center text-white font-bold text-lg`}>
+                        {count}
+                      </div>
+                      <span className="text-xs text-gray-600 mt-1 text-center">{stage.label}</span>
+                    </div>
+                    {index < 6 && (
+                      <ChevronRight className="w-6 h-6 text-gray-300 mx-2" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/components/admin/AdminLayout.tsx (Layout)
+===========================================
+
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  Calendar,
+  Hammer,
+  Euro,
+  LogOut
+} from 'lucide-react';
+
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function AdminLayout({ children }: AdminLayoutProps) {
+  const pathname = usePathname();
+  const { logout } = useAdminAuth();
+
+  const navItems = [
+    { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/admin/leads', label: 'Leads', icon: Users },
+    { href: '/admin/offertes', label: 'Offertes', icon: FileText },
+    { href: '/admin/planning', label: 'Planning', icon: Calendar },
+    { href: '/admin/projecten', label: 'Projecten', icon: Hammer },
+    { href: '/admin/prijzen', label: 'Prijzen', icon: Euro },
+  ];
+
+  const isActive = (href: string) => {
+    if (href === '/admin') {
+      return pathname === '/admin';
+    }
+    return pathname.startsWith(href);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <header className="bg-slate-800 text-white sticky top-0 z-50 shadow-lg">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex justify-between items-center">
+            <Link href="/admin" className="flex items-center gap-2">
+              <span className="text-xl font-bold">Klinkers & Co</span>
+              <span className="text-xs bg-orange-500 px-2 py-0.5 rounded">Admin</span>
+            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-gray-300 hover:text-white hover:bg-slate-700 flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Uitloggen
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="bg-slate-700 border-b border-slate-600">
+        <div className="container mx-auto px-4">
+          <div className="flex gap-1 overflow-x-auto py-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-orange-500 text-white'
+                      : 'text-gray-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-6">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+===========================================
+FILE: src/app/admin/leads/page.tsx (Leads Overzicht)
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+
+interface Lead {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  city: string;
+  project_type: string[] | null;
+  description: string | null;
+  estimated_m2: number | null;
+  status: string;
+  source: string;
+  created_at: string;
+}
+
+export default function LeadsPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchLeads();
+    }
+  }, [isAuthenticated]);
+
+  const fetchLeads = async () => {
+    try {
+      const response = await fetch('/api/admin/leads');
+      if (response.ok) {
+        const data = await response.json();
+        setLeads(data.leads);
+      }
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredLeads = leads
+    .filter(lead => filter === 'all' || lead.status === filter)
+    .filter(lead =>
+      search === '' ||
+      lead.name.toLowerCase().includes(search.toLowerCase()) ||
+      lead.city.toLowerCase().includes(search.toLowerCase()) ||
+      lead.email?.toLowerCase().includes(search.toLowerCase()) ||
+      lead.phone?.includes(search)
+    )
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      new: 'bg-blue-100 text-blue-800 border-blue-200',
+      contacted: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      site_visit_scheduled: 'bg-purple-100 text-purple-800 border-purple-200',
+      quote_sent: 'bg-orange-100 text-orange-800 border-orange-200',
+      negotiating: 'bg-pink-100 text-pink-800 border-pink-200',
+      won: 'bg-green-100 text-green-800 border-green-200',
+      lost: 'bg-red-100 text-red-800 border-red-200',
+      dormant: 'bg-gray-100 text-gray-800 border-gray-200',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      new: 'Nieuw',
+      contacted: 'Gecontacteerd',
+      site_visit_scheduled: 'Afspraak gepland',
+      quote_sent: 'Offerte verstuurd',
+      negotiating: 'In onderhandeling',
+      won: 'Gewonnen',
+      lost: 'Verloren',
+      dormant: 'Slapend',
+    };
+    return labels[status] || status;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('nl-NL', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const statusCounts = {
+    all: leads.length,
+    new: leads.filter(l => l.status === 'new').length,
+    contacted: leads.filter(l => l.status === 'contacted').length,
+    site_visit_scheduled: leads.filter(l => l.status === 'site_visit_scheduled').length,
+    quote_sent: leads.filter(l => l.status === 'quote_sent').length,
+    won: leads.filter(l => l.status === 'won').length,
+    lost: leads.filter(l => l.status === 'lost').length,
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
+            <p className="text-gray-500">Beheer al je leads en klanten</p>
+          </div>
+        </div>
+
+        {/* Search & Filter */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <Input
+                placeholder="Zoek op naam, plaats, email of telefoon..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="md:w-80"
+              />
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: 'all', label: 'Alles' },
+                  { value: 'new', label: 'Nieuw' },
+                  { value: 'contacted', label: 'Gecontacteerd' },
+                  { value: 'quote_sent', label: 'Offerte' },
+                  { value: 'won', label: 'Gewonnen' },
+                  { value: 'lost', label: 'Verloren' },
+                ].map(({ value, label }) => (
+                  <Button
+                    key={value}
+                    variant={filter === value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilter(value)}
+                    className={filter === value ? 'bg-slate-800' : ''}
+                  >
+                    {label} ({statusCounts[value as keyof typeof statusCounts] || 0})
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Leads List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {filter === 'all' ? 'Alle leads' : getStatusLabel(filter)} ({filteredLeads.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filteredLeads.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Geen leads gevonden</p>
+            ) : (
+              <div className="space-y-3">
+                {filteredLeads.map((lead) => (
+                  <Link
+                    key={lead.id}
+                    href={`/admin/leads/${lead.id}`}
+                    className="block border rounded-lg p-4 hover:bg-gray-50 transition-colors hover:border-orange-300"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-semibold text-lg">{lead.name}</h3>
+                        <p className="text-sm text-gray-500">{lead.city}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(lead.status)}`}>
+                        {getStatusLabel(lead.status)}
+                      </span>
+                    </div>
+
+                    {lead.description && (
+                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{lead.description}</p>
+                    )}
+
+                    <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                      {lead.phone && (
+                        <span>Tel: {lead.phone}</span>
+                      )}
+                      {lead.email && (
+                        <span>{lead.email}</span>
+                      )}
+                      {lead.estimated_m2 && (
+                        <span>{lead.estimated_m2} m²</span>
+                      )}
+                      <span>Via: {lead.source}</span>
+                      <span>{formatDate(lead.created_at)}</span>
+                    </div>
+
+                    {lead.project_type && lead.project_type.length > 0 && (
+                      <div className="flex gap-2 mt-3">
+                        {lead.project_type.map((type, i) => (
+                          <span key={i} className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs">
+                            {type}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/app/admin/leads/[id]/page.tsx (Lead Detail)
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+import {
+  FileText,
+  Phone,
+  MessageCircle,
+  Mail,
+  StickyNote,
+  Home,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Calendar,
+  CheckCheck,
+  MapPin,
+  Sparkles,
+  ArrowLeft,
+  type LucideIcon
+} from 'lucide-react';
+
+interface Lead {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  postcode: string | null;
+  city: string;
+  project_type: string[] | null;
+  description: string | null;
+  estimated_m2: number | null;
+  budget_range: string | null;
+  urgency: string | null;
+  status: string;
+  source: string;
+  source_detail: string | null;
+  ai_score: number | null;
+  ai_notes: string | null;
+  lost_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Activity {
+  id: string;
+  activity_type: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+  created_by: string;
+}
+
+interface Quote {
+  id: string;
+  quote_number: string;
+  total: number;
+  status: string;
+  created_at: string;
+}
+
+export default function LeadDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const leadId = params.id as string;
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [newNote, setNewNote] = useState('');
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [lostReason, setLostReason] = useState('');
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [leadId, isAuthenticated]);
+
+  const fetchData = async () => {
+    try {
+      const [leadRes, activitiesRes, quotesRes] = await Promise.all([
+        fetch(`/api/admin/leads/${leadId}`),
+        fetch(`/api/admin/leads/${leadId}/activities`),
+        fetch(`/api/admin/leads/${leadId}/quotes`)
+      ]);
+
+      if (leadRes.ok) {
+        const data = await leadRes.json();
+        setLead(data.lead);
+      }
+
+      if (activitiesRes.ok) {
+        const data = await activitiesRes.json();
+        setActivities(data.activities || []);
+      }
+
+      if (quotesRes.ok) {
+        const data = await quotesRes.json();
+        setQuotes(data.quotes || []);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateStatus = async (newStatus: string, reason?: string) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus,
+          lost_reason: reason || null
+        })
+      });
+
+      if (response.ok) {
+        await fetchData();
+        setShowStatusModal(false);
+        setLostReason('');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addNote = async () => {
+    if (!newNote.trim()) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/leads/${leadId}/activities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activity_type: 'note',
+          title: 'Notitie toegevoegd',
+          description: newNote
+        })
+      });
+
+      if (response.ok) {
+        setNewNote('');
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Error adding note:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      new: 'bg-blue-500',
+      contacted: 'bg-yellow-500',
+      site_visit_scheduled: 'bg-purple-500',
+      quote_sent: 'bg-orange-500',
+      negotiating: 'bg-pink-500',
+      won: 'bg-green-500',
+      lost: 'bg-red-500',
+      dormant: 'bg-gray-500',
+    };
+    return colors[status] || 'bg-gray-500';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      new: 'Nieuw',
+      contacted: 'Gecontacteerd',
+      site_visit_scheduled: 'Afspraak gepland',
+      quote_sent: 'Offerte verstuurd',
+      negotiating: 'In onderhandeling',
+      won: 'Gewonnen',
+      lost: 'Verloren',
+      dormant: 'Slapend',
+    };
+    return labels[status] || status;
+  };
+
+  const getActivityIcon = (type: string): LucideIcon => {
+    const icons: Record<string, LucideIcon> = {
+      note: StickyNote,
+      call: Phone,
+      email: Mail,
+      whatsapp: MessageCircle,
+      site_visit: Home,
+      quote_sent: FileText,
+      quote_accepted: CheckCircle,
+      quote_declined: XCircle,
+      status_change: RefreshCw,
+      follow_up_scheduled: Calendar,
+      follow_up_completed: CheckCheck,
+    };
+    return icons[type] || MapPin;
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('nl-NL', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const allStatuses = [
+    { value: 'new', label: 'Nieuw' },
+    { value: 'contacted', label: 'Gecontacteerd' },
+    { value: 'site_visit_scheduled', label: 'Afspraak gepland' },
+    { value: 'quote_sent', label: 'Offerte verstuurd' },
+    { value: 'negotiating', label: 'In onderhandeling' },
+    { value: 'won', label: 'Gewonnen' },
+    { value: 'lost', label: 'Verloren' },
+    { value: 'dormant', label: 'Slapend' },
+  ];
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  if (!lead) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12">
+          <p className="text-gray-500">Lead niet gevonden</p>
+          <Link href="/admin/leads">
+            <Button className="mt-4">Terug naar leads</Button>
+          </Link>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Breadcrumb & Header */}
+        <div className="flex justify-between items-start">
+          <div>
+            <Link href="/admin/leads" className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+              <ArrowLeft className="w-4 h-4" /> Terug naar leads
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900 mt-2">{lead.name}</h1>
+            <p className="text-gray-500">{lead.city}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`px-4 py-2 rounded-full text-white font-medium ${getStatusColor(lead.status)}`}>
+              {getStatusLabel(lead.status)}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelectedStatus(lead.status);
+                setShowStatusModal(true);
+              }}
+            >
+              Status wijzigen
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Info & Actions */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Contact Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Contactgegevens</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-500">Telefoon</label>
+                  <p className="font-medium">
+                    {lead.phone ? (
+                      <a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline">
+                        {lead.phone}
+                      </a>
+                    ) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Email</label>
+                  <p className="font-medium">
+                    {lead.email ? (
+                      <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">
+                        {lead.email}
+                      </a>
+                    ) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Adres</label>
+                  <p className="font-medium">{lead.address || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Postcode</label>
+                  <p className="font-medium">{lead.postcode || '-'}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Project Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Projectinformatie</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm text-gray-500">Beschrijving</label>
+                  <p className="font-medium whitespace-pre-wrap">{lead.description || '-'}</p>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-500">Geschat oppervlak</label>
+                    <p className="font-medium">{lead.estimated_m2 ? `${lead.estimated_m2} m²` : '-'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">Budget</label>
+                    <p className="font-medium">{lead.budget_range || '-'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">Urgentie</label>
+                    <p className="font-medium">{lead.urgency || '-'}</p>
+                  </div>
+                </div>
+                {lead.project_type && lead.project_type.length > 0 && (
+                  <div>
+                    <label className="text-sm text-gray-500">Type project</label>
+                    <div className="flex gap-2 mt-1">
+                      {lead.project_type.map((type, i) => (
+                        <span key={i} className="bg-slate-100 text-slate-700 px-3 py-1 rounded text-sm">
+                          {type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Acties</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-3">
+                <Link href={`/admin/offerte/${lead.id}`}>
+                  <Button className="bg-orange-500 hover:bg-orange-600">
+                    <FileText className="w-4 h-4 mr-2" /> Offerte maken
+                  </Button>
+                </Link>
+                {lead.phone && (
+                  <>
+                    <a href={`tel:${lead.phone}`}>
+                      <Button variant="outline"><Phone className="w-4 h-4 mr-2" /> Bellen</Button>
+                    </a>
+                    <a href={`https://wa.me/31${lead.phone.replace(/^0/, '').replace(/[^0-9]/g, '')}`} target="_blank">
+                      <Button variant="outline"><MessageCircle className="w-4 h-4 mr-2" /> WhatsApp</Button>
+                    </a>
+                  </>
+                )}
+                {lead.email && (
+                  <a href={`mailto:${lead.email}`}>
+                    <Button variant="outline"><Mail className="w-4 h-4 mr-2" /> Email</Button>
+                  </a>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Add Note */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Notitie toevoegen</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Schrijf een notitie..."
+                  rows={3}
+                />
+                <Button
+                  onClick={addNote}
+                  disabled={saving || !newNote.trim()}
+                  className="mt-3 bg-slate-800 hover:bg-slate-700"
+                >
+                  {saving ? 'Opslaan...' : 'Notitie opslaan'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Quotes */}
+            {quotes.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Offertes ({quotes.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {quotes.map((quote) => (
+                      <Link
+                        key={quote.id}
+                        href={`/admin/offertes/${quote.id}`}
+                        className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50"
+                      >
+                        <div>
+                          <p className="font-medium">{quote.quote_number}</p>
+                          <p className="text-sm text-gray-500">{formatDateTime(quote.created_at)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-orange-600">€{Number(quote.total).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
+                          <span className="text-xs text-gray-500">{quote.status}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Right Column - Timeline */}
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Tijdlijn</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Lead created */}
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Lead aangemaakt</p>
+                      <p className="text-sm text-gray-500">Via {lead.source}</p>
+                      <p className="text-xs text-gray-400">{formatDateTime(lead.created_at)}</p>
+                    </div>
+                  </div>
+
+                  {/* Activities */}
+                  {activities.map((activity) => {
+                    const ActivityIcon = getActivityIcon(activity.activity_type);
+                    return (
+                      <div key={activity.id} className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                          <ActivityIcon className="w-4 h-4 text-slate-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{activity.title}</p>
+                          {activity.description && (
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap">{activity.description}</p>
+                          )}
+                          <p className="text-xs text-gray-400">{formatDateTime(activity.created_at)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {activities.length === 0 && (
+                    <p className="text-gray-500 text-sm">Nog geen activiteiten</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Lead Meta */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Lead info</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Bron</span>
+                  <span>{lead.source}</span>
+                </div>
+                {lead.source_detail && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Bron detail</span>
+                    <span>{lead.source_detail}</span>
+                  </div>
+                )}
+                {lead.ai_score && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">AI Score</span>
+                    <span className="font-medium">{lead.ai_score}/100</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Aangemaakt</span>
+                  <span>{formatDateTime(lead.created_at)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Laatst bijgewerkt</span>
+                  <span>{formatDateTime(lead.updated_at)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Status Change Modal */}
+        {showStatusModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Status wijzigen</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {allStatuses.map((status) => (
+                    <Button
+                      key={status.value}
+                      variant={selectedStatus === status.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedStatus(status.value)}
+                      className={selectedStatus === status.value ? getStatusColor(status.value) : ''}
+                    >
+                      {status.label}
+                    </Button>
+                  ))}
+                </div>
+
+                {selectedStatus === 'lost' && (
+                  <div>
+                    <label className="text-sm font-medium">Reden verloren</label>
+                    <Input
+                      value={lostReason}
+                      onChange={(e) => setLostReason(e.target.value)}
+                      placeholder="Bijv: te duur, andere partij gekozen..."
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowStatusModal(false)}
+                    className="flex-1"
+                  >
+                    Annuleren
+                  </Button>
+                  <Button
+                    onClick={() => updateStatus(selectedStatus, lostReason)}
+                    disabled={saving}
+                    className="flex-1 bg-slate-800 hover:bg-slate-700"
+                  >
+                    {saving ? 'Opslaan...' : 'Opslaan'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/app/admin/offertes/page.tsx (Offertes Overzicht)
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+
+interface Quote {
+  id: string;
+  quote_number: string;
+  lead_id: string;
+  lead_name?: string;
+  lead_city?: string;
+  project_description: string | null;
+  total: number;
+  status: string;
+  created_at: string;
+  valid_until: string | null;
+  decline_reason: string | null;
+}
+
+export default function OffertesPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('all');
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchQuotes();
+    }
+  }, [isAuthenticated]);
+
+  const fetchQuotes = async () => {
+    try {
+      const response = await fetch('/api/admin/quotes');
+      if (response.ok) {
+        const data = await response.json();
+        setQuotes(data.quotes || []);
+      }
+    } catch (error) {
+      console.error('Error fetching quotes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateStatus = async (id: string, status: string, declineReason?: string) => {
+    try {
+      const response = await fetch(`/api/admin/quotes/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          decline_reason: declineReason,
+          responded_at: ['accepted', 'declined'].includes(status) ? new Date().toISOString() : undefined,
+        })
+      });
+
+      if (response.ok) {
+        await fetchQuotes();
+      }
+    } catch (error) {
+      console.error('Error updating quote:', error);
+    }
+  };
+
+  const filteredQuotes = filter === 'all'
+    ? quotes
+    : quotes.filter(q => q.status === filter);
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-800 border-gray-200',
+      sent: 'bg-blue-100 text-blue-800 border-blue-200',
+      viewed: 'bg-purple-100 text-purple-800 border-purple-200',
+      accepted: 'bg-green-100 text-green-800 border-green-200',
+      declined: 'bg-red-100 text-red-800 border-red-200',
+      expired: 'bg-orange-100 text-orange-800 border-orange-200',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      draft: 'Concept',
+      sent: 'Verstuurd',
+      viewed: 'Bekeken',
+      accepted: 'Geaccepteerd',
+      declined: 'Afgewezen',
+      expired: 'Verlopen',
+    };
+    return labels[status] || status;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('nl-NL', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const statusCounts = {
+    all: quotes.length,
+    draft: quotes.filter(q => q.status === 'draft').length,
+    sent: quotes.filter(q => q.status === 'sent').length,
+    accepted: quotes.filter(q => q.status === 'accepted').length,
+    declined: quotes.filter(q => q.status === 'declined').length,
+  };
+
+  const totalValue = quotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0);
+  const acceptedValue = quotes.filter(q => q.status === 'accepted')
+    .reduce((sum, q) => sum + (Number(q.total) || 0), 0);
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Offertes</h1>
+          <p className="text-gray-500">Beheer al je offertes</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold">{quotes.length}</p>
+              <p className="text-sm text-gray-500">Totaal offertes</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold">€{totalValue.toLocaleString('nl-NL')}</p>
+              <p className="text-sm text-gray-500">Totale waarde</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold text-green-600">{statusCounts.accepted}</p>
+              <p className="text-sm text-green-700">Geaccepteerd</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold text-green-600">€{acceptedValue.toLocaleString('nl-NL')}</p>
+              <p className="text-sm text-green-700">Geaccepteerde waarde</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'all', label: 'Alles' },
+                { value: 'draft', label: 'Concept' },
+                { value: 'sent', label: 'Verstuurd' },
+                { value: 'accepted', label: 'Geaccepteerd' },
+                { value: 'declined', label: 'Afgewezen' },
+              ].map(({ value, label }) => (
+                <Button
+                  key={value}
+                  variant={filter === value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilter(value)}
+                  className={filter === value ? 'bg-slate-800' : ''}
+                >
+                  {label} ({statusCounts[value as keyof typeof statusCounts] || 0})
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quotes List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {filter === 'all' ? 'Alle offertes' : getStatusLabel(filter)} ({filteredQuotes.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filteredQuotes.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Geen offertes gevonden</p>
+            ) : (
+              <div className="space-y-3">
+                {filteredQuotes
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .map((quote) => (
+                    <div
+                      key={quote.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-lg">{quote.quote_number}</h3>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(quote.status)}`}>
+                              {getStatusLabel(quote.status)}
+                            </span>
+                          </div>
+                          {quote.lead_name && (
+                            <Link href={`/admin/leads/${quote.lead_id}`} className="text-sm text-blue-600 hover:underline">
+                              {quote.lead_name} - {quote.lead_city}
+                            </Link>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-orange-600">
+                            €{Number(quote.total).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+                          </p>
+                          <p className="text-sm text-gray-500">{formatDate(quote.created_at)}</p>
+                        </div>
+                      </div>
+
+                      {quote.project_description && (
+                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{quote.project_description}</p>
+                      )}
+
+                      {quote.decline_reason && (
+                        <p className="text-red-600 text-sm mb-3">
+                          Reden afwijzing: {quote.decline_reason}
+                        </p>
+                      )}
+
+                      <div className="flex gap-2 flex-wrap">
+                        <Link href={`/admin/offertes/${quote.id}`}>
+                          <Button size="sm" variant="outline">
+                            Bekijken
+                          </Button>
+                        </Link>
+
+                        {quote.status === 'draft' && (
+                          <Button
+                            size="sm"
+                            className="bg-blue-500 hover:bg-blue-600"
+                            onClick={() => updateStatus(quote.id, 'sent')}
+                          >
+                            Markeer als verstuurd
+                          </Button>
+                        )}
+
+                        {quote.status === 'sent' && (
+                          <>
+                            <Button
+                              size="sm"
+                              className="bg-green-500 hover:bg-green-600"
+                              onClick={() => updateStatus(quote.id, 'accepted')}
+                            >
+                              Geaccepteerd
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                const reason = prompt('Reden van afwijzing:');
+                                if (reason !== null) {
+                                  updateStatus(quote.id, 'declined', reason);
+                                }
+                              }}
+                            >
+                              Afgewezen
+                            </Button>
+                          </>
+                        )}
+
+                        {quote.lead_id && (
+                          <Link href={`/admin/offerte/${quote.lead_id}?quoteId=${quote.id}`}>
+                            <Button size="sm" variant="outline">
+                              Bewerken
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/app/admin/offertes/[id]/page.tsx (Offerte Detail)
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+import PDFDownloadButton from '@/components/pdf/PDFDownloadButton';
+import {
+  ArrowLeft,
+  Send,
+  CheckCircle,
+  XCircle,
+  Clock,
+  FileText,
+  User,
+  MapPin,
+  Phone,
+  Mail,
+  Copy,
+  ExternalLink
+} from 'lucide-react';
+
+interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total: number;
+}
+
+interface Lead {
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string;
+}
+
+interface Quote {
+  id: string;
+  quote_number: string;
+  lead_id: string;
+  project_description: string | null;
+  project_address: string | null;
+  valid_until: string | null;
+  line_items: LineItem[];
+  subtotal: number;
+  btw_percentage: number;
+  btw_amount: number;
+  total: number;
+  customer_notes: string | null;
+  status: string;
+  created_at: string;
+  decline_reason: string | null;
+  accept_token: string | null;
+  leads: Lead;
+}
+
+export default function QuoteDetailPage() {
+  const params = useParams();
+  const quoteId = params.id as string;
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && quoteId) {
+      fetchQuote();
+    }
+  }, [isAuthenticated, quoteId]);
+
+  const fetchQuote = async () => {
+    try {
+      const response = await fetch(`/api/admin/quotes/${quoteId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setQuote(data.quote);
+      }
+    } catch (error) {
+      console.error('Error fetching quote:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateStatus = async (status: string, declineReason?: string) => {
+    if (!quote) return;
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/admin/quotes/${quoteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          decline_reason: declineReason,
+          responded_at: ['accepted', 'declined'].includes(status) ? new Date().toISOString() : undefined,
+        })
+      });
+
+      if (response.ok) {
+        await fetchQuote();
+      }
+    } catch (error) {
+      console.error('Error updating quote:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const copyAcceptLink = () => {
+    if (quote?.accept_token) {
+      const link = `${window.location.origin}/offerte/${quote.accept_token}`;
+      navigator.clipboard.writeText(link);
+      alert('Link gekopieerd naar klembord!');
+    }
+  };
+
+  const getStatusInfo = (status: string) => {
+    const statusMap: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+      draft: {
+        label: 'Concept',
+        color: 'text-gray-700',
+        bg: 'bg-gray-100',
+        icon: <FileText className="w-4 h-4" />
+      },
+      sent: {
+        label: 'Verstuurd',
+        color: 'text-blue-700',
+        bg: 'bg-blue-100',
+        icon: <Send className="w-4 h-4" />
+      },
+      viewed: {
+        label: 'Bekeken',
+        color: 'text-purple-700',
+        bg: 'bg-purple-100',
+        icon: <Clock className="w-4 h-4" />
+      },
+      accepted: {
+        label: 'Geaccepteerd',
+        color: 'text-green-700',
+        bg: 'bg-green-100',
+        icon: <CheckCircle className="w-4 h-4" />
+      },
+      declined: {
+        label: 'Afgewezen',
+        color: 'text-red-700',
+        bg: 'bg-red-100',
+        icon: <XCircle className="w-4 h-4" />
+      },
+    };
+    return statusMap[status] || statusMap.draft;
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('nl-NL', {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('nl-NL', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  if (authLoading || loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center py-12">
+          <p className="text-gray-500">Laden...</p>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  if (!quote) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12">
+          <p className="text-gray-500 mb-4">Offerte niet gevonden</p>
+          <Link href="/admin/offertes">
+            <Button variant="outline">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Terug naar offertes
+            </Button>
+          </Link>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  const statusInfo = getStatusInfo(quote.status);
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <Link
+              href="/admin/offertes"
+              className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-2"
+            >
+              <ArrowLeft className="w-4 h-4" /> Terug naar offertes
+            </Link>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">{quote.quote_number}</h1>
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                {statusInfo.icon}
+                {statusInfo.label}
+              </span>
+            </div>
+            <p className="text-gray-500">Aangemaakt op {formatDate(quote.created_at)}</p>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            {/* PDF Download */}
+            <PDFDownloadButton quote={quote} />
+
+            {/* Status Actions */}
+            {quote.status === 'draft' && (
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => updateStatus('sent')}
+                disabled={updating}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Markeer als verstuurd
+              </Button>
+            )}
+
+            {quote.status === 'sent' && (
+              <>
+                <Button
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => updateStatus('accepted')}
+                  disabled={updating}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Geaccepteerd
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-red-600 hover:bg-red-50"
+                  onClick={() => {
+                    const reason = prompt('Reden van afwijzing:');
+                    if (reason !== null) {
+                      updateStatus('declined', reason);
+                    }
+                  }}
+                  disabled={updating}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Afgewezen
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Accept Link */}
+        {quote.accept_token && (
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-blue-900">Klant acceptatie link</p>
+                  <p className="text-sm text-blue-700">
+                    Deel deze link met de klant om de offerte te bekijken en te accepteren
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={copyAcceptLink}>
+                    <Copy className="w-4 h-4 mr-2" /> Kopieer link
+                  </Button>
+                  <Link href={`/offerte/${quote.accept_token}`} target="_blank">
+                    <Button size="sm" variant="outline">
+                      <ExternalLink className="w-4 h-4 mr-2" /> Open
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Project Description */}
+            {quote.project_description && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Projectomschrijving</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700 whitespace-pre-wrap">{quote.project_description}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Line Items */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Offerte regels ({quote.line_items.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-sm text-gray-500">
+                        <th className="pb-3 font-medium">Omschrijving</th>
+                        <th className="pb-3 font-medium text-center">Aantal</th>
+                        <th className="pb-3 font-medium text-center">Eenheid</th>
+                        <th className="pb-3 font-medium text-right">Prijs</th>
+                        <th className="pb-3 font-medium text-right">Totaal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {quote.line_items.map((item, index) => (
+                        <tr key={item.id} className={`border-b last:border-b-0 ${index % 2 === 1 ? 'bg-gray-50' : ''}`}>
+                          <td className="py-3">{item.description}</td>
+                          <td className="py-3 text-center">{item.quantity}</td>
+                          <td className="py-3 text-center text-gray-500">{item.unit}</td>
+                          <td className="py-3 text-right">{formatCurrency(item.unit_price)}</td>
+                          <td className="py-3 text-right font-medium">{formatCurrency(item.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totals */}
+                <div className="mt-6 border-t pt-4">
+                  <div className="flex justify-end">
+                    <div className="w-64 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Subtotaal</span>
+                        <span>{formatCurrency(quote.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">BTW ({quote.btw_percentage}%)</span>
+                        <span>{formatCurrency(quote.btw_amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                        <span>Totaal incl. BTW</span>
+                        <span className="text-orange-600">{formatCurrency(quote.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Customer Notes */}
+            {quote.customer_notes && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Opmerkingen</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700 whitespace-pre-wrap">{quote.customer_notes}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Decline Reason */}
+            {quote.decline_reason && (
+              <Card className="bg-red-50 border-red-200">
+                <CardHeader>
+                  <CardTitle className="text-red-700">Reden afwijzing</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-red-600">{quote.decline_reason}</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Customer Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Klantgegevens
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="font-semibold text-lg">{quote.leads.name}</p>
+                </div>
+
+                {quote.project_address && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                    <span className="text-gray-600">{quote.project_address}</span>
+                  </div>
+                )}
+
+                {quote.leads.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <a href={`tel:${quote.leads.phone}`} className="text-blue-600 hover:underline">
+                      {quote.leads.phone}
+                    </a>
+                  </div>
+                )}
+
+                {quote.leads.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <a href={`mailto:${quote.leads.email}`} className="text-blue-600 hover:underline">
+                      {quote.leads.email}
+                    </a>
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <Link href={`/admin/leads/${quote.lead_id}`}>
+                    <Button variant="outline" size="sm" className="w-full">
+                      Bekijk lead details
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quote Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Offerte details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Offertenummer</span>
+                  <span className="font-medium">{quote.quote_number}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Aangemaakt</span>
+                  <span>{formatDate(quote.created_at)}</span>
+                </div>
+                {quote.valid_until && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Geldig tot</span>
+                    <span>{formatDate(quote.valid_until)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Status</span>
+                  <span className={`font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Acties</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Link href={`/admin/offerte/${quote.lead_id}?quoteId=${quote.id}`} className="block">
+                  <Button variant="outline" className="w-full justify-start">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Offerte bewerken
+                  </Button>
+                </Link>
+
+                {quote.leads.phone && (
+                  <a href={`https://wa.me/${quote.leads.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" className="w-full justify-start text-green-600 hover:bg-green-50">
+                      <Phone className="w-4 h-4 mr-2" />
+                      WhatsApp versturen
+                    </Button>
+                  </a>
+                )}
+
+                {quote.leads.email && (
+                  <a href={`mailto:${quote.leads.email}?subject=Offerte ${quote.quote_number}&body=Beste ${quote.leads.name},%0A%0AHierbij stuur ik u de offerte voor uw tuinproject.%0A%0AMet vriendelijke groet,%0ANiek Klinkers%0AKlinkers %26 Co`}>
+                    <Button variant="outline" className="w-full justify-start">
+                      <Mail className="w-4 h-4 mr-2" />
+                      Email versturen
+                    </Button>
+                  </a>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/app/admin/offerte/[id]/page.tsx (Offerte Editor)
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import { Lightbulb, Ruler, ArrowLeft, FileEdit } from 'lucide-react';
+
+interface Lead {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string;
+  project_type: string[] | null;
+  description: string | null;
+  estimated_m2: number | null;
+}
+
+interface PricingItem {
+  id: string;
+  category: string;
+  item_name: string;
+  unit: string;
+  selling_price_default: number;
+}
+
+interface LineItem {
+  id: string;
+  pricing_id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total: number;
+  reasoning?: string;
+  is_new?: boolean;
+}
+
+interface ExistingQuote {
+  id: string;
+  quote_number: string;
+  project_description: string | null;
+  project_address: string | null;
+  valid_until: string | null;
+  line_items: LineItem[];
+  subtotal: number;
+  btw_percentage: number;
+  btw_amount: number;
+  total: number;
+  customer_notes: string | null;
+  status: string;
+}
+
+export default function OfferteMaker() {
+  const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadId = params.id as string;
+  const quoteId = searchParams.get('quoteId');
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [pricing, setPricing] = useState<PricingItem[]>([]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  // Editing mode state
+  const [existingQuote, setExistingQuote] = useState<ExistingQuote | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const [projectDescription, setProjectDescription] = useState('');
+  const [projectAddress, setProjectAddress] = useState('');
+  const [validDays, setValidDays] = useState(30);
+  const [notes, setNotes] = useState('');
+  const [kladNotities, setKladNotities] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [leadId, quoteId, isAuthenticated]);
+
+  const fetchData = async () => {
+    try {
+      // Build fetch requests array
+      const fetchPromises: Promise<Response>[] = [
+        fetch('/api/admin/leads'),
+        fetch('/api/admin/pricing')
+      ];
+
+      // If editing an existing quote, fetch it too
+      if (quoteId) {
+        fetchPromises.push(fetch(`/api/admin/quotes/${quoteId}`));
+      }
+
+      const responses = await Promise.all(fetchPromises);
+      const [leadsRes, pricingRes, quoteRes] = responses;
+
+      if (leadsRes.ok) {
+        const leadsData = await leadsRes.json();
+        const foundLead = leadsData.leads.find((l: Lead) => l.id === leadId);
+        if (foundLead) {
+          setLead(foundLead);
+          // Only set defaults if NOT editing
+          if (!quoteId) {
+            setProjectAddress(foundLead.address || `${foundLead.city}`);
+            setProjectDescription(foundLead.description || '');
+            if (foundLead.description) {
+              setKladNotities(foundLead.description + (foundLead.estimated_m2 ? `\n\nGeschat: ${foundLead.estimated_m2} m2` : ''));
+            }
+          }
+        }
+      }
+
+      if (pricingRes.ok) {
+        const pricingData = await pricingRes.json();
+        setPricing(pricingData.pricing);
+      }
+
+      // Load existing quote data if editing
+      if (quoteRes && quoteRes.ok) {
+        const quoteData = await quoteRes.json();
+        const quote = quoteData.quote;
+        if (quote) {
+          setExistingQuote(quote);
+          setIsEditing(true);
+          // Populate form with existing quote data
+          setProjectDescription(quote.project_description || '');
+          setProjectAddress(quote.project_address || '');
+          setNotes(quote.customer_notes || '');
+          // Load line items
+          if (quote.line_items && Array.isArray(quote.line_items)) {
+            setLineItems(quote.line_items.map((item: LineItem) => ({
+              ...item,
+              id: item.id || crypto.randomUUID(),
+              total: item.quantity * item.unit_price
+            })));
+          }
+          // Calculate valid days from valid_until
+          if (quote.valid_until) {
+            const validUntil = new Date(quote.valid_until);
+            const now = new Date();
+            const daysRemaining = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            setValidDays(Math.max(daysRemaining, 1));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const analyzeNotes = async () => {
+    if (!kladNotities.trim()) {
+      alert('Voer eerst notities in om te analyseren');
+      return;
+    }
+
+    setAnalyzing(true);
+    setAiAnalysis('');
+    setAiSuggestions([]);
+
+    try {
+      const response = await fetch('/api/admin/analyze-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: kladNotities })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAiAnalysis(data.analysis);
+        setLineItems(data.lineItems);
+        setAiSuggestions(data.suggestions || []);
+        // Update project description with analysis
+        if (data.analysis) {
+          setProjectDescription(data.analysis);
+        }
+        // Show notification if new items were added to pricing database
+        if (data.newItemsAdded && data.newItemsAdded.length > 0) {
+          alert(`${data.newItemsAdded.length} nieuwe prijsitem(s) toegevoegd aan je prijslijst:\n\n• ${data.newItemsAdded.join('\n• ')}\n\nDeze kun je terugvinden en aanpassen in Prijzen beheer.`);
+        }
+      } else {
+        const error = await response.json();
+        alert('Analyse mislukt: ' + (error.error || 'Onbekende fout'));
+      }
+    } catch (error) {
+      console.error('Error analyzing notes:', error);
+      alert('Er ging iets mis bij de analyse');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const addLineItem = (pricingItem: PricingItem) => {
+    const newItem: LineItem = {
+      id: crypto.randomUUID(),
+      pricing_id: pricingItem.id,
+      description: pricingItem.item_name,
+      quantity: 1,
+      unit: pricingItem.unit,
+      unit_price: Number(pricingItem.selling_price_default),
+      total: Number(pricingItem.selling_price_default)
+    };
+    setLineItems([...lineItems, newItem]);
+  };
+
+  const updateLineItem = (id: string, field: keyof LineItem, value: number | string) => {
+    setLineItems(lineItems.map(item => {
+      if (item.id === id) {
+        const updated = { ...item, [field]: value };
+        if (field === 'quantity' || field === 'unit_price') {
+          updated.total = updated.quantity * updated.unit_price;
+        }
+        return updated;
+      }
+      return item;
+    }));
+  };
+
+  const removeLineItem = (id: string) => {
+    setLineItems(lineItems.filter(item => item.id !== id));
+  };
+
+  const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+  const btwAmount = subtotal * 0.21;
+  const total = subtotal + btwAmount;
+
+  const generateQuoteNumber = () => {
+    const year = new Date().getFullYear();
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `KC-${year}-${random}`;
+  };
+
+  const saveQuote = async () => {
+    if (!lead || lineItems.length === 0) return;
+
+    setSaving(true);
+    try {
+      const quoteData = {
+        lead_id: lead.id,
+        project_description: projectDescription,
+        project_address: projectAddress,
+        valid_until: new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        line_items: lineItems,
+        subtotal,
+        btw_percentage: 21,
+        btw_amount: btwAmount,
+        total,
+        customer_notes: notes,
+      };
+
+      let response: Response;
+
+      if (isEditing && existingQuote) {
+        // Update existing quote
+        response = await fetch(`/api/admin/quotes/${existingQuote.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...quoteData,
+            // Include old data for history tracking
+            _old_data: {
+              project_description: existingQuote.project_description,
+              project_address: existingQuote.project_address,
+              line_items: existingQuote.line_items,
+              subtotal: existingQuote.subtotal,
+              total: existingQuote.total,
+              customer_notes: existingQuote.customer_notes,
+            }
+          })
+        });
+      } else {
+        // Create new quote
+        response = await fetch('/api/admin/quotes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...quoteData,
+            quote_number: generateQuoteNumber(),
+            status: 'draft'
+          })
+        });
+      }
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(isEditing ? 'Offerte bijgewerkt!' : 'Offerte opgeslagen!');
+        router.push(`/admin/offertes/${result.quote.id}`);
+      } else {
+        alert('Er ging iets mis bij het opslaan');
+      }
+    } catch (error) {
+      console.error('Error saving quote:', error);
+      alert('Er ging iets mis');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Group pricing by category
+  const pricingByCategory = pricing.reduce((acc, item) => {
+    if (!acc[item.category]) {
+      acc[item.category] = [];
+    }
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, PricingItem[]>);
+
+  const categoryLabels: Record<string, string> = {
+    bestrating: 'Bestrating',
+    beplanting: 'Beplanting',
+    grondwerk: 'Grondwerk',
+    afscheiding: 'Afscheiding',
+    onderhoud: 'Onderhoud'
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect to login
+  }
+
+  if (!lead) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Lead niet gevonden</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-slate-800 text-white py-4">
+        <div className="container mx-auto px-4 flex justify-between items-center">
+          <div>
+            <Link
+              href={isEditing && existingQuote ? `/admin/offertes/${existingQuote.id}` : '/admin'}
+              className="text-sm text-gray-300 hover:text-white flex items-center gap-1"
+            >
+              <ArrowLeft className="w-4 h-4" /> {isEditing ? 'Terug naar offerte' : 'Terug naar overzicht'}
+            </Link>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              {isEditing && <FileEdit className="w-6 h-6" />}
+              {isEditing ? `Offerte ${existingQuote?.quote_number} bewerken` : `Offerte maken voor ${lead.name}`}
+            </h1>
+            {isEditing && (
+              <p className="text-sm text-slate-300">Klant: {lead.name}</p>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left: Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* AI Analyse - NIEUW */}
+            <Card className="border-2 border-orange-200 bg-orange-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-orange-600">AI Offerte Assistent</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  Voer je klad notities in (gesprek, metingen, wensen) en laat AI automatisch de offerte regels genereren.
+                </p>
+                <Textarea
+                  value={kladNotities}
+                  onChange={(e) => setKladNotities(e.target.value)}
+                  placeholder="Voorbeeld:
+Klant wil nieuwe tuin van 6x8 meter
+- Terras van 4x3 meter met keramische tegels
+- Gazon voor de rest
+- Nieuwe schutting aan linkerkant, 8 meter
+- 2 fruitbomen planten
+- Drainage nodig want veel wateroverlast"
+                  rows={8}
+                  className="bg-white mb-4"
+                />
+                <Button
+                  onClick={analyzeNotes}
+                  disabled={analyzing || !kladNotities.trim()}
+                  className="w-full bg-orange-500 hover:bg-orange-600"
+                >
+                  {analyzing ? 'Analyseren...' : 'Analyseer & Genereer Offerte'}
+                </Button>
+
+                {aiAnalysis && (
+                  <div className="mt-4 p-3 bg-white rounded-lg border">
+                    <p className="text-sm font-medium text-gray-700">AI Analyse:</p>
+                    <p className="text-sm text-gray-600">{aiAnalysis}</p>
+                  </div>
+                )}
+
+                {aiSuggestions.length > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4" /> Suggesties:
+                    </p>
+                    <ul className="space-y-1">
+                      {aiSuggestions.map((suggestion, i) => (
+                        <li key={i} className="text-sm text-blue-600 flex items-start gap-2">
+                          <span>•</span>
+                          <span>{suggestion}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Lead Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Klantgegevens</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="font-semibold">{lead.name}</p>
+                    <p className="text-sm text-gray-500">{lead.phone}</p>
+                    <p className="text-sm text-gray-500">{lead.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Project adres</label>
+                    <Input
+                      value={projectAddress}
+                      onChange={(e) => setProjectAddress(e.target.value)}
+                      placeholder="Project adres"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="text-sm font-medium">Project omschrijving</label>
+                  <Textarea
+                    value={projectDescription}
+                    onChange={(e) => setProjectDescription(e.target.value)}
+                    placeholder="Project omschrijving"
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Line Items */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Offerte regels ({lineItems.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {lineItems.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">
+                    Gebruik de AI analyse hierboven of voeg handmatig items toe vanuit de prijslijst rechts
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {lineItems.map((item, index) => (
+                      <div key={item.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-xs text-gray-400 mr-2">{index + 1}.</span>
+                          <Input
+                            value={item.description}
+                            onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                            className="font-medium flex-1 mr-2"
+                          />
+                          <button
+                            onClick={() => removeLineItem(item.id)}
+                            className="text-red-500 hover:text-red-700 text-xl"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 items-center">
+                          <div>
+                            <label className="text-xs text-gray-500">Aantal</label>
+                            <Input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => updateLineItem(item.id, 'quantity', Number(e.target.value))}
+                              min={0}
+                              step={0.1}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Eenheid</label>
+                            <Input value={item.unit} disabled className="bg-gray-50" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Prijs/eenheid</label>
+                            <Input
+                              type="number"
+                              value={item.unit_price}
+                              onChange={(e) => updateLineItem(item.id, 'unit_price', Number(e.target.value))}
+                              min={0}
+                              step={0.01}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Totaal</label>
+                            <p className="font-semibold text-lg text-orange-600">
+                              €{item.total.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                        {item.reasoning && (
+                          <p className="mt-2 text-xs text-gray-500 italic bg-gray-50 p-2 rounded flex items-start gap-2">
+                            <Ruler className="w-3 h-3 mt-0.5 flex-shrink-0" /> {item.reasoning}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Totals */}
+                {lineItems.length > 0 && (
+                  <div className="mt-6 border-t pt-4">
+                    <div className="flex justify-between text-lg">
+                      <span>Subtotaal:</span>
+                      <span>€{subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500">
+                      <span>BTW (21%):</span>
+                      <span>€{btwAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold mt-2 text-orange-600">
+                      <span>Totaal incl. BTW:</span>
+                      <span>€{total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Notes & Save */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-sm font-medium">Offerte geldig (dagen)</label>
+                    <Input
+                      type="number"
+                      value={validDays}
+                      onChange={(e) => setValidDays(Number(e.target.value))}
+                      min={1}
+                    />
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="text-sm font-medium">Opmerkingen voor klant</label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Bijvoorbeeld: inclusief afvoer materiaal, excl. planten, start mogelijk vanaf week 12"
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  onClick={saveQuote}
+                  disabled={lineItems.length === 0 || saving}
+                  className="w-full bg-green-600 hover:bg-green-700 text-lg py-6"
+                >
+                  {saving ? 'Opslaan...' : `${isEditing ? 'Wijzigingen opslaan' : 'Offerte opslaan'} (€${total.toFixed(2)})`}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: Pricing List */}
+          <div>
+            <Card className="sticky top-4">
+              <CardHeader>
+                <CardTitle>Prijslijst (handmatig toevoegen)</CardTitle>
+              </CardHeader>
+              <CardContent className="max-h-[70vh] overflow-y-auto">
+                {Object.entries(pricingByCategory).map(([category, items]) => (
+                  <div key={category} className="mb-4">
+                    <h3 className="font-semibold text-sm text-gray-500 uppercase mb-2">
+                      {categoryLabels[category] || category}
+                    </h3>
+                    <div className="space-y-1">
+                      {items.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => addLineItem(item)}
+                          className="w-full text-left p-2 rounded hover:bg-orange-50 border border-transparent hover:border-orange-200 transition-colors"
+                        >
+                          <div className="flex justify-between">
+                            <span className="text-sm">{item.item_name}</span>
+                            <span className="text-sm text-orange-600 font-medium">
+                              €{Number(item.selling_price_default).toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">per {item.unit}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+===========================================
+FILE: src/app/admin/planning/page.tsx
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+import { MapPin, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+
+interface Appointment {
+  id: string;
+  lead_id: string;
+  lead_name?: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  appointment_type: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  status: string;
+}
+
+export default function PlanningPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedWeek, setSelectedWeek] = useState(0); // 0 = this week
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchAppointments();
+    }
+  }, [isAuthenticated]);
+
+  const fetchAppointments = async () => {
+    try {
+      const response = await fetch('/api/admin/appointments');
+      if (response.ok) {
+        const data = await response.json();
+        setAppointments(data.appointments || []);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getWeekDates = (weekOffset: number) => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1 + (weekOffset * 7)); // Monday
+
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      dates.push(date);
+    }
+    return dates;
+  };
+
+  const weekDates = getWeekDates(selectedWeek);
+  const weekDays = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+
+  const getAppointmentsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return appointments.filter(apt =>
+      apt.scheduled_at.startsWith(dateStr)
+    );
+  };
+
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString('nl-NL', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getAppointmentColor = (type: string) => {
+    const colors: Record<string, string> = {
+      site_visit: 'bg-purple-100 border-purple-300 text-purple-800',
+      follow_up_call: 'bg-blue-100 border-blue-300 text-blue-800',
+      project_start: 'bg-green-100 border-green-300 text-green-800',
+      project_end: 'bg-orange-100 border-orange-300 text-orange-800',
+      other: 'bg-gray-100 border-gray-300 text-gray-800',
+    };
+    return colors[type] || colors.other;
+  };
+
+  const getAppointmentLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      site_visit: 'Locatiebezoek',
+      follow_up_call: 'Terugbellen',
+      project_start: 'Project start',
+      project_end: 'Project einde',
+      other: 'Overig',
+    };
+    return labels[type] || type;
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Planning</h1>
+            <p className="text-gray-500">Beheer je afspraken en planning</p>
+          </div>
+          <Button className="bg-green-600 hover:bg-green-700">
+            <Plus className="w-4 h-4 mr-2" /> Nieuwe afspraak
+          </Button>
+        </div>
+
+        {/* Week Navigation */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <Button
+                variant="outline"
+                onClick={() => setSelectedWeek(selectedWeek - 1)}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Vorige week
+              </Button>
+              <div className="text-center">
+                <p className="font-semibold">
+                  {weekDates[0].toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}
+                  {' - '}
+                  {weekDates[6].toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+                {selectedWeek === 0 && <span className="text-sm text-orange-500">Deze week</span>}
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedWeek(selectedWeek + 1)}
+              >
+                Volgende week <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Week Calendar */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-7 gap-2">
+              {weekDates.map((date, index) => {
+                const dayAppointments = getAppointmentsForDate(date);
+                const isToday = date.toDateString() === new Date().toDateString();
+                const isPast = date < new Date() && !isToday;
+
+                return (
+                  <div key={index} className={`min-h-[200px] border rounded-lg p-2 ${isToday ? 'border-orange-500 bg-orange-50' : isPast ? 'bg-gray-50' : ''}`}>
+                    <div className={`text-center mb-2 pb-2 border-b ${isToday ? 'border-orange-300' : ''}`}>
+                      <p className="text-sm font-medium text-gray-500">{weekDays[index]}</p>
+                      <p className={`text-lg font-bold ${isToday ? 'text-orange-600' : ''}`}>
+                        {date.getDate()}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      {dayAppointments.length === 0 ? (
+                        <p className="text-xs text-gray-400 text-center py-4">Geen afspraken</p>
+                      ) : (
+                        dayAppointments.map((apt) => (
+                          <div
+                            key={apt.id}
+                            className={`p-2 rounded border text-xs ${getAppointmentColor(apt.appointment_type)}`}
+                          >
+                            <p className="font-medium">{formatTime(apt.scheduled_at)}</p>
+                            <p className="truncate">{apt.title}</p>
+                            {apt.location && (
+                              <p className="text-gray-600 truncate flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> {apt.location}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Appointments */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Komende afspraken</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {appointments.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">Nog geen afspraken gepland</p>
+                <p className="text-sm text-gray-400">
+                  Tip: Plan een locatiebezoek vanuit een lead pagina
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {appointments
+                  .filter(apt => new Date(apt.scheduled_at) >= new Date())
+                  .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+                  .slice(0, 10)
+                  .map((apt) => (
+                    <div key={apt.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center gap-4">
+                        <div className="text-center min-w-[60px]">
+                          <p className="text-sm font-medium">
+                            {new Date(apt.scheduled_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                          </p>
+                          <p className="text-lg font-bold">{formatTime(apt.scheduled_at)}</p>
+                        </div>
+                        <div>
+                          <p className="font-medium">{apt.title}</p>
+                          <div className="flex gap-2 text-sm text-gray-500">
+                            <span className={`px-2 py-0.5 rounded text-xs ${getAppointmentColor(apt.appointment_type)}`}>
+                              {getAppointmentLabel(apt.appointment_type)}
+                            </span>
+                            {apt.location && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> {apt.location}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Bekijken
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/app/admin/prijzen/page.tsx
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+import { Shovel, Grid3X3, Leaf, Fence, Scissors, Package, Plus, Sparkles } from 'lucide-react';
+
+interface PricingItem {
+  id: string;
+  category: string;
+  item_name: string;
+  item_description: string | null;
+  unit: string;
+  cost_price: number | null;
+  selling_price_min: number | null;
+  selling_price_max: number | null;
+  selling_price_default: number;
+  is_active: boolean;
+  ai_generated?: boolean;
+  notes?: string;
+}
+
+interface NewItem {
+  category: string;
+  item_name: string;
+  item_description: string;
+  unit: string;
+  selling_price_default: string;
+  selling_price_min: string;
+  selling_price_max: string;
+  cost_price: string;
+}
+
+const categories = [
+  { value: 'grondwerk', label: 'Grondwerk', icon: Shovel },
+  { value: 'bestrating', label: 'Bestrating', icon: Grid3X3 },
+  { value: 'beplanting', label: 'Beplanting', icon: Leaf },
+  { value: 'afscheiding', label: 'Afscheiding', icon: Fence },
+  { value: 'onderhoud', label: 'Onderhoud', icon: Scissors },
+  { value: 'overig', label: 'Overig', icon: Package },
+];
+
+const units = ['m²', 'm³', 'm', 'stuk', 'uur', 'dag', 'forfait'];
+
+export default function PrijzenPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [pricing, setPricing] = useState<PricingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const [newItem, setNewItem] = useState<NewItem>({
+    category: 'grondwerk',
+    item_name: '',
+    item_description: '',
+    unit: 'm²',
+    selling_price_default: '',
+    selling_price_min: '',
+    selling_price_max: '',
+    cost_price: '',
+  });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchPricing();
+    }
+  }, [isAuthenticated]);
+
+  const fetchPricing = async () => {
+    try {
+      const response = await fetch('/api/admin/pricing?all=true');
+      if (response.ok) {
+        const data = await response.json();
+        setPricing(data.pricing);
+      }
+    } catch (error) {
+      console.error('Error fetching pricing:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addItem = async () => {
+    if (!newItem.item_name.trim() || !newItem.selling_price_default) {
+      alert('Vul minimaal naam en standaardprijs in');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: newItem.category,
+          item_name: newItem.item_name,
+          item_description: newItem.item_description || null,
+          unit: newItem.unit,
+          selling_price_default: parseFloat(newItem.selling_price_default),
+          selling_price_min: newItem.selling_price_min ? parseFloat(newItem.selling_price_min) : null,
+          selling_price_max: newItem.selling_price_max ? parseFloat(newItem.selling_price_max) : null,
+          cost_price: newItem.cost_price ? parseFloat(newItem.cost_price) : null,
+          is_active: true,
+        })
+      });
+
+      if (response.ok) {
+        await fetchPricing();
+        setNewItem({
+          category: 'grondwerk',
+          item_name: '',
+          item_description: '',
+          unit: 'm²',
+          selling_price_default: '',
+          selling_price_min: '',
+          selling_price_max: '',
+          cost_price: '',
+        });
+        setShowAddForm(false);
+      }
+    } catch (error) {
+      console.error('Error adding item:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateItem = async (id: string, updates: Partial<PricingItem>) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/pricing/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+
+      if (response.ok) {
+        await fetchPricing();
+        setEditingId(null);
+      }
+    } catch (error) {
+      console.error('Error updating item:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    if (!confirm('Weet je zeker dat je dit item wilt verwijderen?')) return;
+
+    try {
+      const response = await fetch(`/api/admin/pricing/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        await fetchPricing();
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+    }
+  };
+
+  const filteredPricing = activeCategory === 'all'
+    ? pricing
+    : pricing.filter(p => p.category === activeCategory);
+
+  const groupedPricing = filteredPricing.reduce((acc, item) => {
+    if (!acc[item.category]) {
+      acc[item.category] = [];
+    }
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, PricingItem[]>);
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Prijzen Beheren</h1>
+            <p className="text-gray-500">Beheer je prijslijst voor offertes</p>
+          </div>
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Nieuw item
+          </Button>
+        </div>
+
+        {/* Category Filter */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={activeCategory === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveCategory('all')}
+              >
+                Alles ({pricing.length})
+              </Button>
+              {categories.map((cat) => {
+                const count = pricing.filter(p => p.category === cat.value).length;
+                const CategoryIcon = cat.icon;
+                return (
+                  <Button
+                    key={cat.value}
+                    variant={activeCategory === cat.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setActiveCategory(cat.value)}
+                    className="flex items-center gap-1"
+                  >
+                    <CategoryIcon className="w-4 h-4" /> {cat.label} ({count})
+                  </Button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Add New Item Form */}
+        {showAddForm && (
+          <Card className="border-2 border-green-200 bg-green-50">
+            <CardHeader>
+              <CardTitle>Nieuw prijsitem toevoegen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Categorie</label>
+                  <select
+                    value={newItem.category}
+                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 border rounded-md"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Naam *</label>
+                  <Input
+                    value={newItem.item_name}
+                    onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })}
+                    placeholder="Bijv: Zandbed aanbrengen"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Eenheid</label>
+                  <select
+                    value={newItem.unit}
+                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 border rounded-md"
+                  >
+                    {units.map((unit) => (
+                      <option key={unit} value={unit}>{unit}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Standaardprijs *</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newItem.selling_price_default}
+                    onChange={(e) => setNewItem({ ...newItem, selling_price_default: e.target.value })}
+                    placeholder="€"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Min prijs</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newItem.selling_price_min}
+                    onChange={(e) => setNewItem({ ...newItem, selling_price_min: e.target.value })}
+                    placeholder="€"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Max prijs</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newItem.selling_price_max}
+                    onChange={(e) => setNewItem({ ...newItem, selling_price_max: e.target.value })}
+                    placeholder="€"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Inkoopprijs</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newItem.cost_price}
+                    onChange={(e) => setNewItem({ ...newItem, cost_price: e.target.value })}
+                    placeholder="€"
+                  />
+                </div>
+                <div className="md:col-span-2 lg:col-span-1">
+                  <label className="text-sm font-medium">Beschrijving</label>
+                  <Input
+                    value={newItem.item_description}
+                    onChange={(e) => setNewItem({ ...newItem, item_description: e.target.value })}
+                    placeholder="Optioneel"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-4">
+                <Button
+                  onClick={addItem}
+                  disabled={saving}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {saving ? 'Opslaan...' : 'Item toevoegen'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAddForm(false)}
+                >
+                  Annuleren
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pricing List */}
+        {Object.entries(groupedPricing).map(([category, items]) => {
+          const categoryInfo = categories.find(c => c.value === category);
+          const CategoryIcon = categoryInfo?.icon;
+          return (
+            <Card key={category}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {CategoryIcon && <CategoryIcon className="w-5 h-5" />}
+                  <span>{categoryInfo?.label || category}</span>
+                  <span className="text-sm font-normal text-gray-500">({items.length})</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-sm text-gray-500 border-b">
+                        <th className="pb-2 font-medium">Naam</th>
+                        <th className="pb-2 font-medium">Eenheid</th>
+                        <th className="pb-2 font-medium text-right">Prijs</th>
+                        <th className="pb-2 font-medium text-right">Min</th>
+                        <th className="pb-2 font-medium text-right">Max</th>
+                        <th className="pb-2 font-medium text-right">Inkoop</th>
+                        <th className="pb-2 font-medium text-center">Actief</th>
+                        <th className="pb-2 font-medium text-right">Acties</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <tr key={item.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                          <td className="py-3">
+                            {editingId === item.id ? (
+                              <Input
+                                defaultValue={item.item_name}
+                                onBlur={(e) => updateItem(item.id, { item_name: e.target.value })}
+                                className="w-48"
+                              />
+                            ) : (
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{item.item_name}</p>
+                                  {item.ai_generated && (
+                                    <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
+                                      <Sparkles className="w-3 h-3" /> AI
+                                    </span>
+                                  )}
+                                </div>
+                                {item.item_description && (
+                                  <p className="text-xs text-gray-500">{item.item_description}</p>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3">{item.unit}</td>
+                          <td className="py-3 text-right font-medium">
+                            {editingId === item.id ? (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                defaultValue={item.selling_price_default}
+                                onBlur={(e) => updateItem(item.id, { selling_price_default: parseFloat(e.target.value) })}
+                                className="w-24 text-right"
+                              />
+                            ) : (
+                              `€${Number(item.selling_price_default).toFixed(2)}`
+                            )}
+                          </td>
+                          <td className="py-3 text-right text-gray-500">
+                            {item.selling_price_min ? `€${Number(item.selling_price_min).toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 text-right text-gray-500">
+                            {item.selling_price_max ? `€${Number(item.selling_price_max).toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 text-right text-gray-500">
+                            {item.cost_price ? `€${Number(item.cost_price).toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 text-center">
+                            <button
+                              onClick={() => updateItem(item.id, { is_active: !item.is_active })}
+                              className={`w-6 h-6 rounded-full ${item.is_active ? 'bg-green-500' : 'bg-gray-300'}`}
+                            >
+                              {item.is_active && <span className="text-white text-xs">✓</span>}
+                            </button>
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                              >
+                                {editingId === item.id ? 'Klaar' : 'Bewerk'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:bg-red-50"
+                                onClick={() => deleteItem(item.id)}
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+
+        {filteredPricing.length === 0 && (
+          <Card>
+            <CardContent className="py-12 text-center text-gray-500">
+              Geen prijsitems gevonden in deze categorie
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </AdminLayout>
+  );
+}
+
+===========================================
+FILE: src/app/admin/projecten/page.tsx
+===========================================
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAdminAuth } from '@/lib/useAdminAuth';
+import AdminLayout from '@/components/admin/AdminLayout';
+import { Calendar, Flag } from 'lucide-react';
+
+interface Project {
+  id: string;
+  project_number: string;
+  quote_id: string;
+  lead_id: string;
+  lead_name?: string;
+  lead_city?: string;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
+  status: string;
+  quoted_amount: number;
+  additional_work: number;
+  final_amount: number | null;
+}
+
+export default function ProjectenPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('all');
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProjects();
+    }
+  }, [isAuthenticated]);
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/admin/projects');
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data.projects || []);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProjects = filter === 'all'
+    ? projects
+    : projects.filter(p => p.status === filter);
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      scheduled: 'bg-blue-100 text-blue-800 border-blue-200',
+      in_progress: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      completed: 'bg-green-100 text-green-800 border-green-200',
+      invoiced: 'bg-purple-100 text-purple-800 border-purple-200',
+      paid: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      scheduled: 'Gepland',
+      in_progress: 'In uitvoering',
+      completed: 'Afgerond',
+      invoiced: 'Gefactureerd',
+      paid: 'Betaald',
+    };
+    return labels[status] || status;
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('nl-NL', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const statusCounts = {
+    all: projects.length,
+    scheduled: projects.filter(p => p.status === 'scheduled').length,
+    in_progress: projects.filter(p => p.status === 'in_progress').length,
+    completed: projects.filter(p => p.status === 'completed').length,
+    invoiced: projects.filter(p => p.status === 'invoiced').length,
+    paid: projects.filter(p => p.status === 'paid').length,
+  };
+
+  const totalValue = projects.reduce((sum, p) => sum + (Number(p.quoted_amount) || 0), 0);
+  const completedValue = projects
+    .filter(p => ['completed', 'invoiced', 'paid'].includes(p.status))
+    .reduce((sum, p) => sum + (Number(p.final_amount || p.quoted_amount) || 0), 0);
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Laden...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Projecten</h1>
+          <p className="text-gray-500">Beheer je lopende en afgeronde projecten</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold">{projects.length}</p>
+              <p className="text-sm text-gray-500">Totaal projecten</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-yellow-50 border-yellow-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold text-yellow-600">{statusCounts.in_progress}</p>
+              <p className="text-sm text-yellow-700">In uitvoering</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold">€{totalValue.toLocaleString('nl-NL')}</p>
+              <p className="text-sm text-gray-500">Totale waarde</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-bold text-green-600">€{completedValue.toLocaleString('nl-NL')}</p>
+              <p className="text-sm text-green-700">Afgerond</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'all', label: 'Alles' },
+                { value: 'scheduled', label: 'Gepland' },
+                { value: 'in_progress', label: 'In uitvoering' },
+                { value: 'completed', label: 'Afgerond' },
+                { value: 'invoiced', label: 'Gefactureerd' },
+                { value: 'paid', label: 'Betaald' },
+              ].map(({ value, label }) => (
+                <Button
+                  key={value}
+                  variant={filter === value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilter(value)}
+                  className={filter === value ? 'bg-slate-800' : ''}
+                >
+                  {label} ({statusCounts[value as keyof typeof statusCounts] || 0})
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Projects List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {filter === 'all' ? 'Alle projecten' : getStatusLabel(filter)} ({filteredProjects.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filteredProjects.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 mb-4">Nog geen projecten</p>
+                <p className="text-sm text-gray-400">
+                  Projecten worden automatisch aangemaakt wanneer een offerte wordt geaccepteerd
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredProjects
+                  .sort((a, b) => {
+                    const dateA = a.planned_start_date || '9999';
+                    const dateB = b.planned_start_date || '9999';
+                    return dateA.localeCompare(dateB);
+                  })
+                  .map((project) => (
+                    <div
+                      key={project.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-lg">{project.project_number}</h3>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(project.status)}`}>
+                              {getStatusLabel(project.status)}
+                            </span>
+                          </div>
+                          {project.lead_name && (
+                            <Link href={`/admin/leads/${project.lead_id}`} className="text-sm text-blue-600 hover:underline">
+                              {project.lead_name} - {project.lead_city}
+                            </Link>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-orange-600">
+                            €{Number(project.final_amount || project.quoted_amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+                          </p>
+                          {project.additional_work > 0 && (
+                            <p className="text-sm text-green-600">
+                              +€{Number(project.additional_work).toLocaleString('nl-NL')} meerwerk
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4 text-sm text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" /> Start: {formatDate(project.planned_start_date || project.actual_start_date)}
+                        </span>
+                        {project.planned_end_date && (
+                          <span className="flex items-center gap-1">
+                            <Flag className="w-4 h-4" /> Einde: {formatDate(project.planned_end_date)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 mt-3">
+                        <Button size="sm" variant="outline">
+                          Bekijken
+                        </Button>
+                        {project.status === 'scheduled' && (
+                          <Button size="sm" className="bg-yellow-500 hover:bg-yellow-600">
+                            Start project
+                          </Button>
+                        )}
+                        {project.status === 'in_progress' && (
+                          <Button size="sm" className="bg-green-500 hover:bg-green-600">
+                            Afronden
+                          </Button>
+                        )}
+                        {project.status === 'completed' && (
+                          <Button size="sm" className="bg-purple-500 hover:bg-purple-600">
+                            Factureren
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
+}
+
+=== EINDE BACKEND CODE ===

@@ -1,0 +1,152 @@
+============================================================
+KLINKERS & CO - MASTER UI/UX REDESIGN BRIEF
+============================================================
+
+## JOUW ROL
+
+Je bent een world-class UI/UX designer met 15+ jaar ervaring bij top agencies zoals IDEO, Pentagram, en Fantasy. Je hebt gewerkt voor premium merken en weet hoe je een "gewone" website transformeert naar een visueel meesterwerk dat converteert.
+
+Je opdracht: Transformeer deze hoveniers-website van "functioneel maar basic" naar "professioneel, levendig en onweerstaanbaar".
+
+============================================================
+OVER HET BEDRIJF
+============================================================
+
+**Klinkers & Co** - Hovenier in Gouda en omstreken
+
+**Diensten:**
+- Straatwerk (klinkers leggen, opritten, terrassen, tuinpaden)
+- Tuinaanleg (complete tuinen ontwerpen en aanleggen)
+- Groenonderhoud (snoeien, maaien, seizoensonderhoud)
+- Grondwerk (ophogen, egaliseren, afgraven)
+
+**Doelgroep:**
+- Huiseigenaren 35-65 jaar
+- Voornamelijk gezinnen met koopwoning
+- Waarderen kwaliteit boven prijs
+- Willen betrouwbare vakman, geen cowboys
+
+**Gewenste merkidentiteit:**
+- Vakmanschap & Ambacht (geen massaproductie)
+- Betrouwbaar & Persoonlijk (je spreekt met de eigenaar, niet een callcenter)
+- Lokaal & Betrokken (echte Goudse ondernemer)
+- Resultaatgericht (mooie eindresultaten)
+
+**Huidige kleuren (mogen worden aangepast):**
+- Oranje accent: #ea580c
+- Donkergrijs: #1e293b
+- Te overwegen: aardse tinten, groen, natuurlijke kleuren
+
+============================================================
+WAT ER MIS IS (EN MOET VERANDEREN)
+============================================================
+
+❌ Te basic en generiek - ziet eruit als een template
+❌ Geen emotie of sfeer - voelt niet premium
+❌ Afbeeldingen matchen niet met diensten
+❌ Geen beweging of levendigheid
+❌ CTA's zijn niet overtuigend genoeg
+❌ Geen vertrouwenwekkende elementen (reviews, badges, garanties)
+❌ Mobile experience is functioneel maar niet wow
+
+============================================================
+WAT IK WIL BEREIKEN
+============================================================
+
+✅ **Premium uitstraling** - Bezoekers denken direct: "Dit is een professional"
+✅ **Levendig & Dynamisch** - Subtiele animaties, scroll effects, micro-interacties
+✅ **Emotionele connectie** - Sfeervolle beelden die dromen oproepen (mooie tuin, relaxen op terras)
+✅ **Vertrouwen** - Reviews, garanties, certificeringen prominent
+✅ **Heldere journey** - Bezoeker weet exact wat te doen (contact/offerte)
+✅ **Dienst-specifieke beelden** - Echte/realistische afbeeldingen van:
+   - Klinkers/straatwerk in Nederlandse tuinen
+   - Groene tuinen met onderhoud
+   - Tuinaanleg projecten
+   - Terrassen en opritten
+
+============================================================
+CREATIEVE VRIJHEID
+============================================================
+
+Je hebt VOLLEDIGE creatieve vrijheid om:
+
+1. **Kleuren aan te passen** - Stel een nieuw kleurenpalet voor dat beter past bij tuinbranche
+2. **Layout compleet te herzien** - Hero sections, grid layouts, asymmetrische designs
+3. **Typografie te upgraden** - Font pairings die premium voelen
+4. **Nieuwe secties toe te voegen** - Portfolio, testimonials, proces uitleg, team intro
+5. **Animaties voor te stellen** - Scroll animations, hover effects, loading states
+6. **Imagery strategie** - Welk type beelden, waar te vinden (Unsplash zoektermen)
+
+============================================================
+GEWENSTE OUTPUT
+============================================================
+
+Geef voor ELKE pagina/component:
+
+### 1. DESIGN ANALYSE
+- Wat werkt er nu wel/niet
+- Emotionele impact score (1-10)
+- Professionaliteit score (1-10)
+
+### 2. COMPLETE REDESIGN
+Geef VOLLEDIGE nieuwe code, niet alleen snippets:
+- Complete Tailwind classes
+- Nieuwe structuur indien nodig
+- Animatie classes (gebruik Tailwind + eventueel Framer Motion suggesties)
+
+### 3. AFBEELDINGEN
+Voor elke afbeelding die je voorstelt:
+- Beschrijving van wat erop moet staan
+- Unsplash zoekterm om vergelijkbare te vinden
+- Alt-tekst voor accessibility
+- Voorbeeld: "Hero: Luchtfoto van Nederlandse achtertuin met nieuw terras, klinkers, en groene borders. Zoek: 'dutch garden patio aerial' of 'backyard paving stones landscaping'"
+
+### 4. MICRO-INTERACTIES
+- Hover states voor alle knoppen/cards
+- Focus states voor formulieren
+- Loading/success states
+- Scroll-triggered animations
+
+### 5. TYPOGRAPHY
+- Font pairing suggestie (Google Fonts)
+- Heading sizes en weights
+- Body text styling
+- Line heights en letter spacing
+
+============================================================
+TECHNISCHE CONTEXT
+============================================================
+
+- Framework: Next.js 15 met App Router
+- Styling: Tailwind CSS v4
+- UI Components: shadcn/ui
+- Icons: Lucide React
+- Mogelijk toe te voegen: Framer Motion voor animaties
+
+============================================================
+INSPIRATIE REFERENTIES
+============================================================
+
+Denk aan de kwaliteit van:
+- Apple.com (clean, premium, whitespace)
+- Stripe.com (moderne SaaS uitstraling, gradients)
+- Airbnb (warme, uitnodigende fotografie)
+- Nederlandse premium merken (Rituals, Bloomon)
+
+============================================================
+START MET ANALYSE
+============================================================
+
+Analyseer nu de bijgevoegde code en lever:
+
+1. **Executive Summary** - Top 5 grootste problemen en kansen
+2. **Quick Wins** - 5 aanpassingen die direct impact hebben (binnen 30 min te implementeren)
+3. **Complete Redesign** - Volledige nieuwe code per component
+4. **Image Strategy** - Lijst van benodigde afbeeldingen met zoektermen
+5. **Animation Blueprint** - Welke animaties waar toevoegen
+
+Wees NIET zuinig met je output. Ik wil complete, implementeerbare code die ik direct kan copy-pasten.
+
+============================================================
+GO! Transformeer deze website naar iets buitengewoons.
+============================================================

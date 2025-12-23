@@ -510,6 +510,11 @@ export default function Home() {
           <p className="text-sm text-gray-500">
             &copy; 2025 Klinkers & Co - Specialist in tuinaanleg en bestrating
           </p>
+          <p className="text-xs text-gray-600 mt-4">
+            <a href="/voor-hoveniers" className="hover:text-orange-400 transition-colors">
+              Voor hoveniersbedrijven
+            </a>
+          </p>
         </div>
       </footer>
     </div>

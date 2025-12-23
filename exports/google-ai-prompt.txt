@@ -1,0 +1,65 @@
+PROMPT VOOR GOOGLE AI STUDIO - UI/UX CODE REVIEW
+================================================
+
+Kopieer onderstaande prompt naar Google AI Studio en upload het code bestand.
+
+---
+
+## PROMPT (kopieer dit):
+
+Je bent een senior UI/UX developer en design expert. Analyseer de bijgevoegde React/Next.js code en geef concrete verbeteringen voor de gebruikerservaring en visuele uitstraling.
+
+**Context:**
+- Dit is een website voor Klinkers & Co, een hoveniersbedrijf in Gouda
+- Doelgroep: Huiseigenaren (35-65 jaar) die tuinwerk nodig hebben
+- Branding: Professioneel, betrouwbaar, ambachtelijk
+- Kleuren: Oranje (#ea580c) als accent, donkergrijs (#1e293b), wit/licht
+
+**Geef feedback op:**
+
+1. **Visuele hiërarchie**
+   - Is de informatie logisch gestructureerd?
+   - Zijn CTA's (call-to-actions) duidelijk zichtbaar?
+
+2. **Mobile-first design**
+   - Werkt de layout goed op mobiel?
+   - Zijn touch targets groot genoeg (min 44px)?
+
+3. **Toegankelijkheid**
+   - Zijn er accessibility issues?
+   - Kleurcontrast voldoende?
+
+4. **Micro-interacties**
+   - Zijn er hover/focus states?
+   - Loading states aanwezig?
+
+5. **Consistentie**
+   - Worden componenten consistent gebruikt?
+   - Is de spacing/padding uniform?
+
+**Output formaat:**
+
+Voor elke verbetering, geef:
+1. **Probleem:** Wat is er mis
+2. **Impact:** Waarom is dit belangrijk (laag/medium/hoog)
+3. **Oplossing:** Concrete code aanpassing (Tailwind classes of React code)
+
+Sorteer op impact (hoogste eerst).
+
+---
+
+## ALTERNATIEVE PROMPT (korter):
+
+Analyseer deze React/Next.js code voor een hoveniersbedrijf website.
+Geef de top 10 UI/UX verbeteringen met concrete Tailwind CSS code changes.
+Focus op: mobile-first, CTA zichtbaarheid, professionele uitstraling, en gebruiksgemak.
+Output als genummerde lijst met probleem + oplossing (inclusief code).
+
+---
+
+## BESTANDEN:
+
+1. frontend-code.txt - Homepage, chat widget, offerte pagina (klant-facing)
+2. backend-code.txt - Admin dashboard, leads, offertes beheer
+
+Upload eerst frontend-code.txt, dan backend-code.txt apart.
