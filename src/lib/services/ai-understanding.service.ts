@@ -68,6 +68,26 @@ Let goed op het verschil:
 - "bestaande klinkers opnieuw leggen" → herstraten
 - "nieuwe klinkers" → nieuw
 - "tegels eruit en nieuwe klinkers" → vervangen (of nieuw als volledig andere materialen)
+- "tegels rechtzetten" → repareren (niet herstraten - alleen aanpassen, niet opnieuw leggen)
+- "opnieuw voegen" → repareren (alleen voegen herstellen, niet opnieuw leggen)
+- "verzakte bestrating ophogen" → herstraten (opnieuw leggen na nivelleren)
+- "bestaande klinkers in ander patroon" → herstraten (zelfde materialen, nieuwe lay-out)
+- "bestaande tegels eruit, nieuwe klinkers erin" → vervangen (ander materiaal terug)
+- "terras opbreken en opnieuw leggen" → herstraten (zelfde materialen opnieuw gelegd)
+- "oude tegels eruit, zelfde soort terug" → vervangen (zelfs als zelfde type, volledig vervangen)
+
+## Gemengde Werkzaamheden
+Als één schouwnotitie zowel herstraten ALS nieuw werk bevat, maak dan APARTE activiteiten voor elk:
+- Voorbeeld: "herstraten pad 15m2, nieuw terras 20m2" wordt TWEE activiteiten: één herstraten, één nieuw
+- Elke activiteit krijgt zijn eigen afmetingen geëxtraheerd uit het relevante deel van de tekst
+- Behandel ook combinaties van verwijderen + nieuw, repareren + nieuw, etc. als aparte activiteiten
+
+## Verwijderen
+Classificeer alleen als verwijderen wanneer er GEEN vervangingswerk wordt genoemd:
+- "schutting afbreken en afvoeren" → verwijderen (alleen verwijdering, geen vervanging)
+- "bomen rooien" → verwijderen
+- "bestrating opbreken en afvoeren" → verwijderen (als geen nieuw werk genoemd)
+- Als er wel vervangingswerk wordt genoemd voor hetzelfde item, gebruik dan "vervangen" in plaats van "verwijderen"
 
 ## Afmetingen
 Extraheer alle genoemde afmetingen:
