@@ -16,7 +16,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { analyzeNotes } from '@/lib/services/ai-understanding.service';
 import { AIUnderstandingResultSchema, AIUnderstandingResult } from '@/lib/schemas/ai-understanding.schema';
-import { DIMENSION_EXAMPLES, CATEGORY_EXAMPLES } from '../fixtures/schouwnotities';
+import { DIMENSION_EXAMPLES, CATEGORY_EXAMPLES, EDGE_CASE_EXAMPLES } from '../fixtures/schouwnotities';
 
 // Create a mock parse function that will be reused
 const mockParse = vi.fn();
@@ -748,6 +748,253 @@ describe('AI Understanding Service', () => {
           betas: expect.arrayContaining(['structured-outputs-2025-11-13'])
         })
       );
+    });
+  });
+
+  describe('Edge Case Classification (AI-04)', () => {
+    test('tegels rechtzetten classifies as repareren', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'repareren',
+            description: 'Tegels rechtzetten',
+            dimensions: { area: 10 },
+            source_text: EDGE_CASE_EXAMPLES.tegels_rechtzetten,
+            materials_mentioned: ['tegels']
+          }
+        ],
+        summary: 'Tegels rechtzetten',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.tegels_rechtzetten);
+
+      expect(result.activities[0].action).toBe('repareren');
+    });
+
+    test('opnieuw voegen classifies as repareren', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'repareren',
+            description: 'Klinkers opnieuw voegen',
+            dimensions: { area: 25 },
+            source_text: EDGE_CASE_EXAMPLES.opnieuw_voegen,
+            materials_mentioned: ['klinkers']
+          }
+        ],
+        summary: 'Opnieuw voegen',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.opnieuw_voegen);
+
+      expect(result.activities[0].action).toBe('repareren');
+    });
+
+    test('verzakte bestrating ophogen classifies as herstraten', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'herstraten',
+            description: 'Verzakte bestrating ophogen en opnieuw leggen',
+            dimensions: { area: 15 },
+            source_text: EDGE_CASE_EXAMPLES.verzakt_ophogen,
+            materials_mentioned: ['bestrating']
+          }
+        ],
+        summary: 'Bestrating herstraten',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.verzakt_ophogen);
+
+      expect(result.activities[0].action).toBe('herstraten');
+    });
+
+    test('ander patroon classifies as herstraten', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'herstraten',
+            description: 'Bestaande klinkers in visgraatpatroon leggen',
+            dimensions: { area: 30 },
+            source_text: EDGE_CASE_EXAMPLES.ander_patroon,
+            materials_mentioned: ['klinkers']
+          }
+        ],
+        summary: 'Klinkers herstraten',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.ander_patroon);
+
+      expect(result.activities[0].action).toBe('herstraten');
+    });
+
+    test('zelfde soort terug classifies as vervangen', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'vervangen',
+            description: 'Oude tegels eruit, zelfde soort terug',
+            dimensions: { area: 20 },
+            source_text: EDGE_CASE_EXAMPLES.zelfde_soort_terug,
+            materials_mentioned: ['tegels']
+          }
+        ],
+        summary: 'Tegels vervangen',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.zelfde_soort_terug);
+
+      expect(result.activities[0].action).toBe('vervangen');
+    });
+
+    test('ander materiaal classifies as vervangen', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'vervangen',
+            description: 'Bestaande tegels eruit, nieuwe klinkers erin',
+            dimensions: { area: 18 },
+            source_text: EDGE_CASE_EXAMPLES.ander_materiaal,
+            materials_mentioned: ['tegels', 'klinkers']
+          }
+        ],
+        summary: 'Tegels vervangen door klinkers',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.ander_materiaal);
+
+      expect(result.activities[0].action).toBe('vervangen');
+    });
+
+    test('alleen verwijderen classifies as verwijderen', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'erfafscheiding',
+            action: 'verwijderen',
+            description: 'Schutting afbreken en afvoeren',
+            dimensions: { length: 8 },
+            source_text: EDGE_CASE_EXAMPLES.alleen_verwijderen,
+            materials_mentioned: ['schutting']
+          }
+        ],
+        summary: 'Schutting verwijderen',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.alleen_verwijderen);
+
+      expect(result.activities[0].action).toBe('verwijderen');
+    });
+
+    test('mixed input splits into herstraten + nieuw activities', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'herstraten',
+            description: 'Bestaand pad herstraten',
+            dimensions: { area: 15 },
+            source_text: 'Bestaand pad 15m2 herstraten',
+            materials_mentioned: []
+          },
+          {
+            type: 'bestrating',
+            action: 'nieuw',
+            description: 'Nieuw terras met keramische tegels',
+            dimensions: { area: 20 },
+            source_text: 'nieuw terras 20m2 met keramische tegels',
+            materials_mentioned: ['keramische tegels']
+          }
+        ],
+        summary: 'Pad herstraten en nieuw terras',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.mixed_herstraten_nieuw);
+
+      expect(result.activities).toHaveLength(2);
+      expect(result.activities[0].action).toBe('herstraten');
+      expect(result.activities[1].action).toBe('nieuw');
+    });
+
+    test('mixed input splits into verwijderen + nieuw activities', async () => {
+      const mockResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'erfafscheiding',
+            action: 'verwijderen',
+            description: 'Oude schutting verwijderen',
+            dimensions: { length: 10 },
+            source_text: 'Oude schutting 10m verwijderen',
+            materials_mentioned: ['schutting']
+          },
+          {
+            type: 'erfafscheiding',
+            action: 'nieuw',
+            description: 'Nieuwe schutting plaatsen',
+            dimensions: { length: 12 },
+            source_text: 'nieuwe schutting 12m plaatsen',
+            materials_mentioned: ['schutting']
+          }
+        ],
+        summary: 'Oude schutting verwijderen en nieuwe plaatsen',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockResponse
+      });
+
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.mixed_verwijderen_nieuw);
+
+      expect(result.activities).toHaveLength(2);
+      expect(result.activities[0].action).toBe('verwijderen');
+      expect(result.activities[1].action).toBe('nieuw');
     });
   });
 });

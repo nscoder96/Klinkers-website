@@ -249,9 +249,51 @@ Opsluitbanden:
 ];
 
 /**
+ * EDGE_CASE_EXAMPLES
+ *
+ * Tests for ambiguous classification scenarios that require careful prompt engineering.
+ * Covers repareren vs herstraten vs vervangen disambiguation and mixed-scenario splitting.
+ */
+export const EDGE_CASE_EXAMPLES = {
+  /** Should be repareren - just adjusting, not re-laying */
+  tegels_rechtzetten: "Tegels rechtzetten bij terras 10m2",
+
+  /** Should be repareren - only fixing joints */
+  opnieuw_voegen: "Klinkers opnieuw voegen oprit 25m2",
+
+  /** Should be herstraten - full re-lay after leveling */
+  verzakt_ophogen: "Verzakte bestrating ophogen en opnieuw leggen 15m2",
+
+  /** Should be herstraten - same materials, different pattern */
+  ander_patroon: "Bestaande klinkers in visgraatpatroon leggen 30m2",
+
+  /** Should be vervangen - same type but fully replaced */
+  zelfde_soort_terug: "Oude tegels eruit, zelfde soort terug 20m2",
+
+  /** Should be vervangen - different material back */
+  ander_materiaal: "Bestaande tegels eruit, nieuwe klinkers erin 18m2",
+
+  /** Should be verwijderen - removal only, no replacement */
+  alleen_verwijderen: "Schutting afbreken en afvoeren 8m",
+
+  /** Mixed: should split into herstraten + nieuw activities */
+  mixed_herstraten_nieuw: "Bestaand pad 15m2 herstraten, nieuw terras 20m2 met keramische tegels",
+
+  /** Mixed: should split into verwijderen + nieuw activities */
+  mixed_verwijderen_nieuw: "Oude schutting 10m verwijderen, nieuwe schutting 12m plaatsen",
+
+  /** Ambiguous: "opnieuw aanleggen" could be herstraten or nieuw - should be herstraten if materials reused */
+  opnieuw_aanleggen_hergebruik: "Gazon opnieuw aanleggen 40m2, bestaande graszoden hergebruiken",
+
+  /** Ambiguous: "opnieuw aanleggen" with new materials - should be nieuw */
+  opnieuw_aanleggen_nieuw: "Gazon opnieuw aanleggen 40m2 met nieuwe graszoden",
+} as const;
+
+/**
  * Type exports for type safety in tests
  */
 export type DimensionExampleKey = keyof typeof DIMENSION_EXAMPLES;
 export type CategoryExampleKey = keyof typeof CATEGORY_EXAMPLES;
 export type ActionExampleKey = keyof typeof ACTION_EXAMPLES;
 export type FullSchouwnotitieExample = (typeof FULL_SCHOUWNOTITIE_EXAMPLES)[number];
+export type EdgeCaseExampleKey = keyof typeof EDGE_CASE_EXAMPLES;
