@@ -200,7 +200,7 @@ describe('Business Logic Service', () => {
       expect(laborItems.length).toBeGreaterThan(0);
     });
 
-    test('verwijderen action generates BOTH arbeid and materiaal items', async () => {
+    test('verwijderen action generates ONLY arbeid items (no new materials)', async () => {
       const aiResult: AIUnderstandingResult = {
         activities: [
           {
@@ -221,8 +221,8 @@ describe('Business Logic Service', () => {
       const materialItems = breakdown.items.filter(i => i.line_type === 'materiaal');
       const laborItems = breakdown.items.filter(i => i.line_type === 'arbeid');
 
-      // Verwijderen includes materials (disposal/afvoer costs)
-      expect(materialItems.length).toBeGreaterThan(0);
+      // Verwijderen is arbeid-only: no new materials needed for removal
+      expect(materialItems).toHaveLength(0);
       expect(laborItems.length).toBeGreaterThan(0);
     });
 

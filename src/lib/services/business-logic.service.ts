@@ -163,10 +163,14 @@ function calculateQuantity(
 
 /**
  * Generates work items from a single activity.
- * Handles herstraten logic: only arbeid items for herstraten/repareren actions.
+ * Handles arbeid-only logic: herstraten/repareren/verwijderen generate no materials.
  */
 function generateItemsForActivity(activity: Activity): WorkItem[] {
   const items: WorkItem[] = [];
+  const isArbeidOnly =
+    activity.action === "herstraten" ||
+    activity.action === "repareren" ||
+    activity.action === "verwijderen";
   const isHerstraten =
     activity.action === "herstraten" || activity.action === "repareren";
 
@@ -177,10 +181,10 @@ function generateItemsForActivity(activity: Activity): WorkItem[] {
     is_herstraten: isHerstraten,
   };
 
-  // CRITICAL: Herstraten logic
-  // When action is 'herstraten' or 'repareren', only generate arbeid items
-  // because the customer reuses existing materials (no new materials needed)
-  if (isHerstraten) {
+  // CRITICAL: Arbeid-only logic
+  // herstraten/repareren: customer reuses existing materials
+  // verwijderen: only removal labor, no new materials needed
+  if (isArbeidOnly) {
     // Only generate arbeid items - NO materials
     const unit = getDefaultUnit(activity.type as WorkCategory, "arbeid");
     const quantity = calculateQuantity(activity, "arbeid", unit);
