@@ -460,6 +460,171 @@ describe('Full Pipeline Integration', () => {
       expect(materialItem!.quantity).toBe(40); // Uses area
       expect(materialItem!.unit).toBe('m2');
     });
+
+    test('verwijderen generates arbeid-only items (no materials)', async () => {
+      const mockAIResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'verwijderen',
+            description: 'Bestaande bestrating verwijderen en afvoeren',
+            dimensions: { area: 25 },
+            source_text: 'Bestaande bestrating verwijderen 25m2',
+            materials_mentioned: []
+          }
+        ],
+        summary: 'Bestrating verwijderen',
+        confidence: 0.95
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockAIResponse
+      });
+
+      const aiResult = await analyzeNotes('Bestrating verwijderen');
+      expect(aiResult.activities[0].action).toBe('verwijderen');
+
+      const breakdown = await generateWorkBreakdown(aiResult);
+
+      const materialItems = breakdown.items.filter(i => i.line_type === 'materiaal');
+      const laborItems = breakdown.items.filter(i => i.line_type === 'arbeid');
+
+      // CRITICAL: verwijderen should have NO material items
+      expect(materialItems).toHaveLength(0);
+      expect(laborItems.length).toBeGreaterThan(0);
+    });
+
+    test('mixed herstraten + nieuw + verwijderen correctly splits item types', async () => {
+      const mockAIResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'bestrating',
+            action: 'herstraten',
+            description: 'Bestaande klinkers herstraten',
+            dimensions: { area: 20 },
+            source_text: 'Bestaande klinkers 20m2 herstraten',
+            materials_mentioned: []
+          },
+          {
+            type: 'bestrating',
+            action: 'nieuw',
+            description: 'Nieuw bestrating aanleggen',
+            dimensions: { area: 15 },
+            source_text: 'Nieuwe klinkers 15m2 aanleggen',
+            materials_mentioned: ['klinkers']
+          },
+          {
+            type: 'erfafscheiding',
+            action: 'verwijderen',
+            description: 'Erfafscheiding verwijderen',
+            dimensions: { length: 8 },
+            source_text: 'Bestaande schutting 8m verwijderen',
+            materials_mentioned: []
+          }
+        ],
+        summary: 'Mix van herstraten, nieuw en verwijderen',
+        confidence: 0.9
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockAIResponse
+      });
+
+      const aiResult = await analyzeNotes('Mixed actions test');
+      const breakdown = await generateWorkBreakdown(aiResult);
+
+      // Activity 1 (herstraten): arbeid only, is_herstraten=true
+      const herstratenItems = breakdown.items.filter(
+        i => i.category === 'bestrating' && i.is_herstraten
+      );
+      expect(herstratenItems.every(i => i.line_type === 'arbeid')).toBe(true);
+
+      // Activity 2 (nieuw): both materiaal and arbeid, is_herstraten=false
+      const nieuwBestratingItems = breakdown.items.filter(
+        i => i.category === 'bestrating' && !i.is_herstraten
+      );
+      const nieuwMaterialItems = nieuwBestratingItems.filter(i => i.line_type === 'materiaal');
+      const nieuwLaborItems = nieuwBestratingItems.filter(i => i.line_type === 'arbeid');
+      expect(nieuwMaterialItems.length).toBeGreaterThan(0);
+      expect(nieuwLaborItems.length).toBeGreaterThan(0);
+
+      // Activity 3 (verwijderen): arbeid only, is_herstraten=false
+      const verwijderenItems = breakdown.items.filter(
+        i => i.category === 'erfafscheiding'
+      );
+      expect(verwijderenItems.every(i => i.line_type === 'arbeid')).toBe(true);
+      expect(verwijderenItems.every(i => !i.is_herstraten)).toBe(true);
+    });
+
+    test('vervangen generates both arbeid and materiaal items', async () => {
+      const mockAIResponse: AIUnderstandingResult = {
+        activities: [
+          {
+            type: 'erfafscheiding',
+            action: 'vervangen',
+            description: 'Schutting vervangen',
+            dimensions: { length: 12 },
+            source_text: 'Bestaande schutting 12m vervangen',
+            materials_mentioned: ['21-planks schutting']
+          }
+        ],
+        summary: 'Schutting vervangen',
+        confidence: 0.95
+      };
+
+      mockParse.mockResolvedValue({
+        parsed_output: mockAIResponse
+      });
+
+      const aiResult = await analyzeNotes('Schutting vervangen');
+      expect(aiResult.activities[0].action).toBe('vervangen');
+
+      const breakdown = await generateWorkBreakdown(aiResult);
+
+      const materialItems = breakdown.items.filter(i => i.line_type === 'materiaal');
+      const laborItems = breakdown.items.filter(i => i.line_type === 'arbeid');
+
+      // vervangen generates BOTH material and labor items (unlike herstraten)
+      expect(materialItems.length).toBeGreaterThan(0);
+      expect(laborItems.length).toBeGreaterThan(0);
+      expect(breakdown.items.every(i => !i.is_herstraten)).toBe(true);
+    });
+
+    test('all arbeid-only actions produce zero materiaal items across categories', async () => {
+      const arbeidOnlyActions = ['herstraten', 'repareren', 'verwijderen'] as const;
+      const testCategories = ['bestrating', 'erfafscheiding', 'vlonders'] as const;
+
+      for (const action of arbeidOnlyActions) {
+        for (const category of testCategories) {
+          const mockAIResponse: AIUnderstandingResult = {
+            activities: [
+              {
+                type: category,
+                action: action,
+                description: `Test ${action} for ${category}`,
+                dimensions: { area: 10 },
+                source_text: `Test ${action} ${category}`,
+                materials_mentioned: []
+              }
+            ],
+            summary: `Test ${action}`,
+            confidence: 0.9
+          };
+
+          mockParse.mockResolvedValue({
+            parsed_output: mockAIResponse
+          });
+
+          const aiResult = await analyzeNotes(`Test ${action} ${category}`);
+          const breakdown = await generateWorkBreakdown(aiResult);
+
+          const materialItems = breakdown.items.filter(i => i.line_type === 'materiaal');
+
+          // CRITICAL: All arbeid-only actions must produce ZERO material items
+          expect(materialItems).toHaveLength(0);
+        }
+      }
+    });
   });
 
   describe.skipIf(!process.env.REAL_AI_TESTS)('With Real AI', () => {
