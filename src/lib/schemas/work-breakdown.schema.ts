@@ -72,6 +72,23 @@ export const WorkItemSchema = z.object({
 });
 
 /**
+ * Metadata about a source activity from Layer 1.
+ * Used to group work items by tuinelement in the final quote.
+ */
+export const ActivityMetadataSchema = z.object({
+  description: z.string().describe("Human-readable description of the element"),
+  type: WorkCategoryEnum.describe("Work category of the activity"),
+  action: z.string().describe("Action performed (nieuw, herstraten, etc.)"),
+  dimensions: z.object({
+    length: z.number().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    area: z.number().optional(),
+    count: z.number().optional(),
+  }).describe("Dimensions of the activity"),
+});
+
+/**
  * Complete work breakdown result.
  * Contains all work items derived from Layer 1 activities.
  */
@@ -79,6 +96,9 @@ export const WorkBreakdownSchema = z.object({
   items: z
     .array(WorkItemSchema)
     .describe("All work items in the breakdown"),
+  activity_map: z
+    .record(z.string(), ActivityMetadataSchema)
+    .describe("Maps source_activity_id to activity metadata for element grouping"),
   summary: z
     .string()
     .describe("Summary of the work breakdown"),
@@ -89,4 +109,5 @@ export type WorkCategory = z.infer<typeof WorkCategoryEnum>;
 export type LineType = z.infer<typeof LineTypeEnum>;
 export type Unit = z.infer<typeof UnitEnum>;
 export type WorkItem = z.infer<typeof WorkItemSchema>;
+export type ActivityMetadata = z.infer<typeof ActivityMetadataSchema>;
 export type WorkBreakdown = z.infer<typeof WorkBreakdownSchema>;

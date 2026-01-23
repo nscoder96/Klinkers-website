@@ -26,7 +26,9 @@ import {
   WorkCategory,
   LineType,
   Unit,
+  ActivityMetadata,
 } from "../schemas/work-breakdown.schema";
+import { createServerClient, WorkRule, LinkedTask } from "../supabase/client";
 
 /**
  * Custom error class for validation failures at layer boundaries.
@@ -261,9 +263,31 @@ export async function generateWorkBreakdown(
   aiResult: AIUnderstandingResult
 ): Promise<WorkBreakdown> {
   const allItems: WorkItem[] = [];
+  const activityMap: Record<string, ActivityMetadata> = {};
 
   for (const activity of aiResult.activities) {
+    const activityId = crypto.randomUUID();
     const items = generateItemsForActivity(activity);
+
+    // Assign source_activity_id to all items from this activity
+    for (const item of items) {
+      item.source_activity_id = activityId;
+    }
+
+    // Build activity_map entry
+    activityMap[activityId] = {
+      description: activity.description,
+      type: activity.type as WorkCategory,
+      action: activity.action,
+      dimensions: {
+        length: activity.dimensions.length ?? undefined,
+        width: activity.dimensions.width ?? undefined,
+        height: activity.dimensions.height ?? undefined,
+        area: activity.dimensions.area ?? undefined,
+        count: activity.dimensions.count ?? undefined,
+      },
+    };
+
     allItems.push(...items);
   }
 
@@ -274,6 +298,7 @@ export async function generateWorkBreakdown(
 
   const breakdown: WorkBreakdown = {
     items: allItems,
+    activity_map: activityMap,
     summary: `Werkuitsplitsing: ${allItems.length} items (${materialCount} materiaal, ${laborCount} arbeid). ${herstratenCount > 0 ? `${herstratenCount} items zijn herstraat-werk (alleen arbeid, geen materialen).` : ""} Gebaseerd op ${aiResult.activities.length} gedetecteerde activiteiten.`,
   };
 
@@ -287,4 +312,111 @@ export async function generateWorkBreakdown(
   }
 
   return validated.data;
+}
+
+/**
+ * Finds a matching work rule for a work item description.
+ * Uses case-insensitive partial matching on activity_name.
+ */
+function findMatchingRule(
+  description: string,
+  rules: WorkRule[]
+): WorkRule | null {
+  const desc = description.toLowerCase().replace(/^arbeid:\s*/i, "");
+
+  for (const rule of rules) {
+    const ruleName = rule.activity_name.toLowerCase();
+    if (
+      desc.includes(ruleName) ||
+      ruleName.includes(desc) ||
+      desc.replace(/\s+/g, "_").includes(rule.activity_slug?.toLowerCase() ?? "")
+    ) {
+      return rule;
+    }
+  }
+  return null;
+}
+
+/**
+ * Generates work items from a work rule's linked tasks.
+ * Linked tasks are added as arbeid items in the same category.
+ */
+function generateLinkedItems(
+  rule: WorkRule,
+  parentItem: WorkItem
+): WorkItem[] {
+  const items: WorkItem[] = [];
+  const enabledTasks = (rule.linked_tasks || []).filter(
+    (t: LinkedTask) => t.enabled
+  );
+
+  for (const task of enabledTasks) {
+    // Skip if this task matches the parent description (avoid duplicates)
+    if (parentItem.description.toLowerCase().includes(task.name.toLowerCase())) {
+      continue;
+    }
+
+    items.push({
+      id: crypto.randomUUID(),
+      category: (rule.category as WorkCategory) || parentItem.category,
+      description: task.name,
+      line_type: "arbeid" as LineType,
+      quantity: parentItem.quantity,
+      unit: (task.unit as Unit) || parentItem.unit,
+      source_activity_id: parentItem.source_activity_id,
+      is_herstraten: parentItem.is_herstraten,
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Expands a work breakdown with linked tasks from the work_rules database.
+ *
+ * For each work item, looks up matching work rules and adds
+ * enabled linked tasks as additional arbeid items.
+ *
+ * @param breakdown - Initial work breakdown from generateWorkBreakdown
+ * @returns Enhanced work breakdown with linked task items added
+ */
+export async function expandWithWorkRules(
+  breakdown: WorkBreakdown
+): Promise<WorkBreakdown> {
+  const supabase = createServerClient();
+  if (!supabase) {
+    return breakdown;
+  }
+
+  const { data: rules, error } = await supabase
+    .from("work_rules")
+    .select("*")
+    .eq("is_active", true)
+    .or("tenant_id.is.null");
+
+  if (error || !rules) {
+    console.warn("Could not fetch work rules:", error?.message);
+    return breakdown;
+  }
+
+  const workRules = rules as WorkRule[];
+  const expandedItems: WorkItem[] = [...breakdown.items];
+
+  for (const item of breakdown.items) {
+    const matchingRule = findMatchingRule(item.description, workRules);
+    if (!matchingRule) continue;
+
+    const linkedItems = generateLinkedItems(matchingRule, item);
+    expandedItems.push(...linkedItems);
+  }
+
+  const addedCount = expandedItems.length - breakdown.items.length;
+
+  return {
+    items: expandedItems,
+    activity_map: breakdown.activity_map,
+    summary: addedCount > 0
+      ? `${breakdown.summary} Uitgebreid met ${addedCount} gekoppelde taken uit arbeidsregels.`
+      : breakdown.summary,
+  };
 }
