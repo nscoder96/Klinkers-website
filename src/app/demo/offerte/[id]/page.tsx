@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useDemoAuth } from '@/lib/useDemoAuth';
 import { Lightbulb, Ruler, ArrowLeft, FileEdit, Sparkles, PlayCircle } from 'lucide-react';
+import { ProductPicker } from '@/components/quote/ProductPicker';
+import type { PricingHierarchy } from '@/app/api/admin/pricing/hierarchy/route';
 
 interface Lead {
   id: string;
@@ -40,6 +42,8 @@ interface LineItem {
   total: number;
   reasoning?: string;
   is_new?: boolean;
+  line_type?: 'materiaal' | 'arbeid';
+  category?: string;
 }
 
 interface OfferteSection {
@@ -84,6 +88,7 @@ export default function DemoOfferteMaker() {
   const [existingQuote, setExistingQuote] = useState<ExistingQuote | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  const [pricingHierarchy, setPricingHierarchy] = useState<PricingHierarchy>({});
   const [projectDescription, setProjectDescription] = useState('');
   const [projectAddress, setProjectAddress] = useState('');
   const [validDays, setValidDays] = useState(30);
@@ -103,7 +108,8 @@ export default function DemoOfferteMaker() {
       // Build fetch requests array
       const fetchPromises: Promise<Response>[] = [
         fetch('/api/demo/leads'),
-        fetch('/api/demo/pricing')
+        fetch('/api/demo/pricing'),
+        fetch('/api/admin/pricing/hierarchy?type=materiaal')
       ];
 
       // If editing an existing quote, fetch it too
@@ -112,7 +118,7 @@ export default function DemoOfferteMaker() {
       }
 
       const responses = await Promise.all(fetchPromises);
-      const [leadsRes, pricingRes, quoteRes] = responses;
+      const [leadsRes, pricingRes, hierarchyRes, quoteRes] = responses;
 
       if (leadsRes.ok) {
         const leadsData = await leadsRes.json();
@@ -133,6 +139,11 @@ export default function DemoOfferteMaker() {
       if (pricingRes.ok) {
         const pricingData = await pricingRes.json();
         setPricing(pricingData.pricing);
+      }
+
+      if (hierarchyRes && hierarchyRes.ok) {
+        const hierarchyData = await hierarchyRes.json();
+        setPricingHierarchy(hierarchyData.hierarchy || {});
       }
 
       // Load existing quote data if editing
@@ -212,6 +223,8 @@ export default function DemoOfferteMaker() {
               unit_price: item.unit_price,
               total: item.quantity * item.unit_price,
               reasoning: item.reasoning,
+              line_type: (item.line_type as 'materiaal' | 'arbeid') || undefined,
+              category: section.category || 'overig',
             })),
           }));
           setSections(newSections);
@@ -271,6 +284,64 @@ export default function DemoOfferteMaker() {
       .map(s => ({ ...s, items: s.items.filter(item => item.id !== id) }))
       .filter(s => s.items.length > 0)
     );
+  };
+
+  const handleProductSelect = (itemId: string, selected: { pricing_id: string; description: string; unit: string; unit_price: number }) => {
+    const updater = (item: LineItem) => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          pricing_id: selected.pricing_id,
+          description: selected.description,
+          unit: selected.unit,
+          unit_price: selected.unit_price,
+          total: item.quantity * selected.unit_price,
+        };
+      }
+      return item;
+    };
+    setLineItems(lineItems.map(updater));
+    setSections(sections.map(s => ({ ...s, items: s.items.map(updater) })));
+  };
+
+  const handleAddNewProduct = async (itemId: string, newProduct: { item_name: string; unit: string; selling_price_default: number; category: string; subcategory: string }) => {
+    try {
+      const response = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_name: newProduct.item_name,
+          category: newProduct.category,
+          subcategory: newProduct.subcategory,
+          unit: newProduct.unit,
+          selling_price_default: newProduct.selling_price_default,
+          item_type: 'materiaal',
+          is_active: true,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const savedItem = data.pricing;
+
+        // Update the line item with the new product
+        handleProductSelect(itemId, {
+          pricing_id: savedItem.id,
+          description: savedItem.item_name,
+          unit: savedItem.unit,
+          unit_price: Number(savedItem.selling_price_default),
+        });
+
+        // Refresh hierarchy
+        const hierarchyRes = await fetch('/api/admin/pricing/hierarchy?type=materiaal');
+        if (hierarchyRes.ok) {
+          const hierarchyData = await hierarchyRes.json();
+          setPricingHierarchy(hierarchyData.hierarchy || {});
+        }
+      }
+    } catch (error) {
+      console.error('Error adding new product:', error);
+    }
   };
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
@@ -540,11 +611,28 @@ Klant wil nieuwe tuin van 6x8 meter
                             {section.items.map((item) => (
                               <div key={item.id} className="p-4">
                                 <div className="flex justify-between items-start mb-2">
-                                  <Input
-                                    value={item.description}
-                                    onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                                    className="font-medium flex-1 mr-2"
-                                  />
+                                  {item.line_type === 'materiaal' && Object.keys(pricingHierarchy).length > 0 ? (
+                                    <div className="flex-1 mr-2">
+                                      <ProductPicker
+                                        currentItem={{
+                                          pricing_id: item.pricing_id,
+                                          description: item.description,
+                                          unit: item.unit,
+                                          unit_price: item.unit_price,
+                                          category: item.category || section.category || 'overig',
+                                        }}
+                                        hierarchy={pricingHierarchy}
+                                        onSelect={(selected) => handleProductSelect(item.id, selected)}
+                                        onAddNew={(newProduct) => handleAddNewProduct(item.id, newProduct)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <Input
+                                      value={item.description}
+                                      onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                                      className="font-medium flex-1 mr-2"
+                                    />
+                                  )}
                                   <button
                                     onClick={() => removeLineItem(item.id)}
                                     className="text-red-500 hover:text-red-700 text-xl"
