@@ -35,6 +35,39 @@ interface PricingItem {
   item_type: 'arbeid' | 'materiaal';
 }
 
+function maakExclusiesSectie(): Section {
+  const standaardExclusies = [
+    'Verplaatsen van tuinmeubilair, potten en plantenbakken',
+    'Sloopwerkzaamheden niet expliciet vermeld in de offerte',
+    'Afvoer van materialen met gevaarlijke stoffen (bijv. asbest)',
+    'Grondwerkzaamheden buiten de beschreven oppervlakte',
+    'Meerwerk buiten de omschreven werkzaamheden',
+    'Water en elektra tijdens uitvoering (dient beschikbaar te zijn)',
+  ];
+
+  return {
+    id: crypto.randomUUID(),
+    title: 'Niet inbegrepen',
+    category: 'overig',
+    items: standaardExclusies.map((beschrijving) => ({
+      id: crypto.randomUUID(),
+      description: beschrijving,
+      quantity: 1,
+      unit: 'stuk',
+      unit_price: 0,
+      total_price: 0,
+      line_type: 'arbeid' as const,
+      markup_percent: null,
+      vat_rate: 0,
+      is_ai_calculated: false,
+      calculation_breakdown: null,
+      pricing_id: null,
+    })),
+    subtotal: 0,
+    isExpanded: false,
+  };
+}
+
 export default function NieuweOfferte() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
@@ -259,7 +292,7 @@ export default function NieuweOfferte() {
       isExpanded: true
     }));
 
-    setSections(newSections);
+    setSections([...newSections, maakExclusiesSectie()]);
     setShowAnalysisProgress(false);
     setAnalyzing(false);
     setStep('editor');
