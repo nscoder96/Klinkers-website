@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import MultiFormatInput from '@/components/quote/MultiFormatInput';
 import AnalysisProgress from '@/components/quote/AnalysisProgress';
+import KoppelprijsCheck from '@/components/quote/KoppelprijsCheck';
 import QuoteEditorTable, { Section, LineItem } from '@/components/quotes/QuoteEditorTable';
 
 interface PricingItem {
@@ -72,16 +73,26 @@ export default function NieuweOfferte() {
   const [patroon, setPatroon] = useState<'recht' | 'halfsteens' | 'visgraat' | 'rond'>('recht');
   const [grondtype, setGrondtype] = useState<'zand' | 'klei' | 'veen'>('zand');
   const [bereikbaarheid, setBereikbaarheid] = useState<'goed' | 'matig' | 'slecht'>('goed');
+  const [uurprijs, setUurprijs] = useState(55);
 
   // Steps: 'input' | 'analyzing' | 'editor'
   const [step, setStep] = useState<'input' | 'analyzing' | 'editor'>('input');
 
   const fetchData = useCallback(async () => {
     try {
-      const pricingRes = await fetch('/api/admin/pricing');
+      const [pricingRes, settingsRes] = await Promise.all([
+        fetch('/api/admin/pricing'),
+        fetch('/api/admin/quote-settings'),
+      ]);
       if (pricingRes.ok) {
         const pricingData = await pricingRes.json();
         setPricing(pricingData.pricing || []);
+      }
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        if (settingsData.settings?.default_hourly_rate) {
+          setUurprijs(settingsData.settings.default_hourly_rate);
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -533,6 +544,25 @@ export default function NieuweOfferte() {
         {/* Step 3: Editor */}
         {step === 'editor' && (
           <div className="animate-fade-in space-y-4">
+            {sections.length > 0 && (() => {
+              const totaalExclBtw = sections.reduce((sum, section) =>
+                sum + section.items.reduce((s, item) => s + item.total_price, 0), 0
+              );
+              const totalM2 = sections.reduce((sum, section) =>
+                sum + section.items
+                  .filter(item => item.unit === 'm2' && item.line_type === 'materiaal')
+                  .reduce((s, item) => s + item.quantity, 0), 0
+              );
+              return (
+                <div className="max-w-xs">
+                  <KoppelprijsCheck
+                    totaalExclBtw={totaalExclBtw}
+                    uurprijs={uurprijs}
+                    totalM2={totalM2}
+                  />
+                </div>
+              );
+            })()}
             <QuoteEditorTable
               sections={sections}
               onSectionsChange={setSections}
