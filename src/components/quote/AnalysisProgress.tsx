@@ -76,23 +76,32 @@ interface StepStatus {
   tasks_added?: number;
   tasks?: LinkedTask[];
   items_count?: number;
+  elements?: string[];
+  current?: number;
+  total?: number;
 }
 
 interface AnalysisProgressProps {
   notes: string;
+  patroon?: 'recht' | 'halfsteens' | 'visgraat' | 'rond';
+  grondtype?: 'zand' | 'klei' | 'veen';
+  bereikbaarheid?: 'goed' | 'matig' | 'slecht';
   onComplete: (result: AnalysisResult) => void;
   onCancel: () => void;
 }
 
 export default function AnalysisProgress({
   notes,
+  patroon = 'recht',
+  grondtype = 'zand',
+  bereikbaarheid = 'goed',
   onComplete,
   onCancel
 }: AnalysisProgressProps) {
   const [steps, setSteps] = useState<StepStatus[]>([
-    { step: 1, status: 'pending', message: 'Werkzaamheden detecteren' },
-    { step: 2, status: 'pending', message: 'Gekoppelde taken bepalen' },
-    { step: 3, status: 'pending', message: 'Materialen en prijzen berekenen' }
+    { step: 1, status: 'pending', message: 'Notities opdelen in onderdelen' },
+    { step: 2, status: 'pending', message: 'Onderdelen verwerken' },
+    { step: 3, status: 'pending', message: 'Offerte samenstellen' }
   ]);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -103,16 +112,21 @@ export default function AnalysisProgress({
     setError(null);
     setResult(null);
     setSteps([
-      { step: 1, status: 'pending', message: 'Werkzaamheden detecteren' },
-      { step: 2, status: 'pending', message: 'Gekoppelde taken bepalen' },
-      { step: 3, status: 'pending', message: 'Materialen en prijzen berekenen' }
+      { step: 1, status: 'pending', message: 'Notities opdelen in onderdelen' },
+      { step: 2, status: 'pending', message: 'Onderdelen verwerken' },
+      { step: 3, status: 'pending', message: 'Offerte samenstellen' }
     ]);
 
     try {
       const response = await fetch('/api/admin/analyze-steps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes })
+        body: JSON.stringify({
+          notes,
+          patroon,
+          grondtype,
+          bereikbaarheid,
+        })
       });
 
       if (!response.ok) {
@@ -152,7 +166,10 @@ export default function AnalysisProgress({
                         activities: data.activities,
                         tasks_added: data.tasks_added,
                         tasks: data.tasks,
-                        items_count: data.items_count
+                        items_count: data.items_count,
+                        elements: data.elements ?? s.elements,
+                        current: data.current ?? s.current,
+                        total: data.total ?? s.total,
                       }
                     : s
                 ));
@@ -179,7 +196,7 @@ export default function AnalysisProgress({
     } finally {
       setIsRunning(false);
     }
-  }, [notes, onComplete]);
+  }, [notes, patroon, grondtype, bereikbaarheid, onComplete]);
 
   // Start analysis on mount
   useEffect(() => {
@@ -239,21 +256,26 @@ export default function AnalysisProgress({
                   </span>
                 </div>
 
-                {/* Step details */}
-                {step.status === 'complete' && step.activities && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    → {step.activities.map(a => `${a.name} (${a.quantity}${a.unit})`).join(', ')}
-                  </p>
+                {/* Step 1: toon gevonden onderdelen */}
+                {step.step === 1 && step.status === 'complete' && step.elements && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {step.elements.map((name, idx) => (
+                      <span key={idx} className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
                 )}
-                {step.status === 'complete' && step.tasks_added !== undefined && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    → {step.tasks_added} taken toegevoegd op basis van arbeidsregels
-                  </p>
-                )}
-                {step.status === 'complete' && step.items_count !== undefined && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    → {step.items_count} items berekend met prijzen
-                  </p>
+                {/* Step 2: voortgangsbalk per element */}
+                {step.step === 2 && step.total !== undefined && step.total > 0 && (
+                  <div className="mt-1">
+                    <div className="w-full bg-orange-200 rounded-full h-1.5">
+                      <div
+                        className="bg-orange-500 h-1.5 rounded-full transition-all duration-300"
+                        style={{ width: `${((step.current ?? 0) / step.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
                 {step.status === 'error' && step.error && (
                   <p className="text-sm text-red-600 mt-1">
