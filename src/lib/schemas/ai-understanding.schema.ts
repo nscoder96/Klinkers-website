@@ -49,6 +49,18 @@ export const DimensionsSchema = z.object({
   height: z.number().optional().describe("Height in meters"),
   count: z.number().optional().describe("Count of items"),
   area: z.number().optional().describe("Area in square meters (m2)"),
+  afgraafdiepte_cm: z
+    .number()
+    .optional()
+    .describe(
+      "Afgraafdiepte/cunetdiepte in cm — ALLEEN als de stratenmaker dit expliciet noteert. NOOIT gokken of verzinnen."
+    ),
+  zanddikte_cm: z
+    .number()
+    .optional()
+    .describe(
+      "Dikte van het zandbed/zandpakket in cm — ALLEEN als de stratenmaker dit expliciet noteert. NOOIT gokken of verzinnen."
+    ),
 });
 
 /**

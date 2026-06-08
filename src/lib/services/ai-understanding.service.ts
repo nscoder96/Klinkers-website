@@ -99,6 +99,27 @@ Extraheer alle genoemde afmetingen:
 
 Als je afmetingen kunt afleiden (bijv. 5x3m = 15m2), geef dan beide.
 
+## Stratenmaker-terminologie (KEN deze termen)
+Dit is een stratenmakersbedrijf. Herken en gebruik deze vaktermen:
+- **Constructie/grondwerk:** cunet, afgraven, menggranulaat, straatzand, zandbed, zandpakket, afreien, verdichten, aantrillen, afschot
+- **Bestratingmateriaal:** waalformaat, dikformaat, waaltjes, koppelstones, betonklinkers, gebakken klinkers, betonstraatstenen, sierbestrating, natuursteen, flagstones, graniet, basalt
+- **Randwerk:** opsluitband, trottoirband, opsluiten
+- **Legpatronen:** visgraat, wildverband, elleboogverband, halfsteens
+- **Afwerking:** invegen, voegen, voegzand, voegmortel
+- **Water:** kolk, kolkaansluiting, drainagegoot
+- **Materieel:** trilplaat, minigraver, steenknipper, container
+
+## KRITIEK — Gouda/eigenaar-specifieke extractie (afgraafdiepte + zanddikte)
+De eigenaar werkt in Gouda (veengrond) en noteert ZELF of er afgegraven moet
+worden en hoeveel cm zand erop moet.
+- Extraheer **afgraafdiepte_cm** ALLEEN als expliciet genoemd. Voorbeelden:
+  "afgraven 20cm" → afgraafdiepte_cm: 20. "cunet 25 cm" → afgraafdiepte_cm: 25.
+- Extraheer **zanddikte_cm** ALLEEN als expliciet genoemd. Voorbeelden:
+  "zandbed 10cm" → zanddikte_cm: 10. "8 cm straatzand" → zanddikte_cm: 8.
+- **GOK of VERZIN NOOIT een diepte of zandhoeveelheid.** Staat het er niet, laat
+  het veld dan weg (undefined). Het systeem zet dan zelf een waarschuwingsvlag.
+- Menggranulaat hoort NIET in een offerte tenzij de eigenaar het expliciet noemt.
+
 ${TOP_20_RULES_FOR_PROMPT}`;
 
 /**

@@ -725,7 +725,7 @@ describe('AI Understanding Service', () => {
 
       expect(mockParse).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-sonnet-4-5-20250514'
+          model: 'claude-sonnet-4-6'
         })
       );
     });

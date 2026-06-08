@@ -44,6 +44,12 @@ export interface AssemblyInput {
   width_m?: number;
   afgraafdiepte_cm?: number;
   zanddikte_cm?: number;
+  /**
+   * Door de klant gekozen bestratingmateriaal (bv. "klinkers waalformaat
+   * antraciet"). Wordt gebruikt om de hoofd-materiaalregel met een lege
+   * `item_name_match` aan een prijs te koppelen (token-overlap).
+   */
+  materialPreference?: string;
 }
 
 export interface ExpandedLine {
@@ -99,6 +105,39 @@ function findPricing(
       p.item_name.toLowerCase().trim().includes(needle)
   );
   return partial ?? null;
+}
+
+/** Betekenisvolle tokens (≥4 letters) uit een naam, voor token-overlap. */
+function significantTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-zà-ÿ]+/)
+    .filter((t) => t.length >= 4);
+}
+
+/**
+ * Koppelt een vrije materiaalvoorkeur ("klinkers waalformaat antraciet") aan de
+ * prijsbibliotheek via token-overlap. Kleur-/restwoorden (antraciet) tellen niet
+ * mee omdat ze niet in de prijsnamen voorkomen. Null = geen voldoende match.
+ */
+function matchMaterialPreference(
+  preference: string,
+  pricingDb: PricingRow[]
+): PricingRow | null {
+  const exact = findPricing(preference, pricingDb);
+  if (exact) return exact;
+
+  const prefLower = preference.toLowerCase();
+  let best: { row: PricingRow; score: number } | null = null;
+  for (const row of pricingDb) {
+    if (row.item_type != null && row.item_type !== "materiaal") continue;
+    const tokens = significantTokens(row.item_name);
+    const score = tokens.filter((t) => prefLower.includes(t)).length;
+    if (score > 0 && (!best || score > best.score)) {
+      best = { row, score };
+    }
+  }
+  return best?.row ?? null;
 }
 
 /**
@@ -171,9 +210,21 @@ export function expandAssembly(
       }
     }
 
-    // Prijs opzoeken (geen match-naam = handmatige keuze nodig)
+    // Prijs opzoeken (geen match-naam = handmatige keuze nodig).
+    // Een lege match op de hoofd-materiaalregel (oppervlakteformule, niet de
+    // opsluitband op de omtrek) wordt opgelost via de materiaalvoorkeur.
     let pricing: PricingRow | null = null;
-    if (c.item_name_match) pricing = findPricing(c.item_name_match, pricingDb);
+    let resolvedName: string | null = c.item_name_match;
+    if (c.item_name_match) {
+      pricing = findPricing(c.item_name_match, pricingDb);
+    } else if (
+      c.component_type === "materiaal" &&
+      input.materialPreference &&
+      !c.quantity_formula?.includes("perimeter")
+    ) {
+      pricing = matchMaterialPreference(input.materialPreference, pricingDb);
+      if (pricing) resolvedName = input.materialPreference;
+    }
 
     let unitPriceCents: Cents | null = null;
     let totalCents: Cents | null = null;
@@ -192,14 +243,14 @@ export function expandAssembly(
 
     if (priceSource === "missing") {
       lineFlags.push(
-        c.item_name_match
-          ? `⚠️ Geen prijs gevonden voor "${c.item_name_match}" — vul handmatig in`
+        resolvedName
+          ? `⚠️ Geen prijs gevonden voor "${resolvedName}" — vul handmatig in`
           : "⚠️ Materiaalkeuze/prijs handmatig invullen"
       );
     }
 
     lines.push({
-      description: c.item_name_match ?? "(handmatig in te vullen)",
+      description: resolvedName ?? "(handmatig in te vullen)",
       line_type: c.component_type,
       quantity,
       unit: pricing?.unit ?? "m²",
