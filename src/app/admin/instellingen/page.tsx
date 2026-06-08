@@ -1,433 +1,352 @@
 'use client';
 
+/**
+ * Instellingen (F7) — alles opgeslagen in de database (quote_settings), niet meer
+ * in localStorage. Vier werkende tabs die direct effect hebben op de
+ * offerte-generator (generate-v2 leest deze velden):
+ *   - Offertelay-out: prijsmethode, arbeidweergave, BTW, geldigheidsduur
+ *   - Arbeidstarieven: uurtarief (default €85), dagafronding, CROW-dagproductie
+ *   - Materiaalmarges: standaard inkoopopslag
+ *   - Bedrijfsgegevens: naam, adres, KvK, BTW-nummer, IBAN
+ */
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
-import {
-  Building2,
-  Phone,
-  Mail,
-  MapPin,
-  FileText,
-  CreditCard,
-  Save,
-  Check,
-  RefreshCw,
-  Settings,
-  Sparkles,
-  FileEdit,
-  ChevronRight,
-  Wrench,
-  Calculator,
-  Link2,
-  Euro
-} from 'lucide-react';
-import Link from 'next/link';
+import { Save, Check, FileText, Wrench, Euro, Building2 } from 'lucide-react';
 
-// Klinkers & Co Design System - Orange/Blue
-const colors = {
-  orange: '#FA5D29',
-  orangeLight: '#FFF4F1',
-  blue: '#49B3FC',
-  blueLight: '#F0F9FF',
-  dark: '#222222',
-  darkLight: '#2d2d2d',
-  slate: '#64748b',
-  stone: '#F8F8F8',
-  warmWhite: '#ffffff',
-  mist: '#ededed',
-  success: '#22c55e',
-  successLight: '#f0fdf4',
-};
+type Settings = Record<string, unknown>;
 
-interface CompanySettings {
-  company_name: string;
-  owner_name: string;
-  phone: string;
-  email: string;
-  address: string;
-  postal_code: string;
-  city: string;
-  kvk_number: string;
-  btw_number: string;
-  iban: string;
-}
+type TabKey = 'layout' | 'arbeid' | 'marges' | 'bedrijf';
 
-const SETTINGS_KEY = 'klinkers_company_settings';
-const ONBOARDING_KEY = 'klinkers_onboarding_complete';
+const TABS: { key: TabKey; label: string; icon: typeof FileText }[] = [
+  { key: 'layout', label: 'Offertelay-out', icon: FileText },
+  { key: 'arbeid', label: 'Arbeidstarieven', icon: Wrench },
+  { key: 'marges', label: 'Materiaalmarges', icon: Euro },
+  { key: 'bedrijf', label: 'Bedrijfsgegevens', icon: Building2 },
+];
 
 export default function SettingsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
-  const [settings, setSettings] = useState<CompanySettings>({
-    company_name: '',
-    owner_name: '',
-    phone: '',
-    email: '',
-    address: '',
-    postal_code: '',
-    city: '',
-    kvk_number: '',
-    btw_number: '',
-    iban: '',
-  });
+  const { isLoading: authLoading } = useAdminAuth();
+  const [settings, setSettings] = useState<Settings>({});
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>('layout');
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem(SETTINGS_KEY);
-    if (savedSettings) {
-      try {
-        setSettings(JSON.parse(savedSettings));
-      } catch (e) {
-        console.error('Error loading settings:', e);
-      }
-    }
+    fetch('/api/admin/quote-settings')
+      .then((r) => r.json())
+      .then((data) => setSettings(data.settings ?? {}))
+      .catch(() => setError('Kon instellingen niet laden'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = () => {
-    setSaving(true);
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-
-    setTimeout(() => {
-      setSaving(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }, 500);
-  };
-
-  const handleResetOnboarding = () => {
-    localStorage.removeItem(ONBOARDING_KEY);
-    window.location.reload();
-  };
-
-  const updateSetting = (key: keyof CompanySettings, value: string) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+  const set = (key: string, value: unknown) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
   };
 
-  if (authLoading) {
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/quote-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stripReadOnly(settings)),
+      });
+      if (!res.ok) throw new Error('save failed');
+      const data = await res.json();
+      setSettings(data.settings ?? settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setError('Opslaan mislukt. Probeer het opnieuw.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: `linear-gradient(to bottom right, ${colors.stone}, ${colors.warmWhite})` }}>
-        <div className="text-center">
-          <div className="relative w-16 h-16 mx-auto mb-4">
-            <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{ backgroundColor: colors.orange }} />
-            <div className="relative w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: colors.orange }}>
-              <Sparkles className="w-8 h-8 text-white animate-pulse" />
-            </div>
-          </div>
-          <p className="font-medium" style={{ color: colors.slate }}>Laden...</p>
-        </div>
-      </div>
+      <AdminLayout>
+        <div className="py-20 text-center text-slate-500">Instellingen laden…</div>
+      </AdminLayout>
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  const str = (k: string) => (settings[k] as string) ?? '';
+  const num = (k: string, fallback = 0) =>
+    settings[k] != null ? Number(settings[k]) : fallback;
+  const bool = (k: string) => Boolean(settings[k]);
 
   return (
     <AdminLayout>
-      <div className="space-y-8 max-w-4xl">
-        {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: colors.dark }}>
-            <Settings className="w-8 h-8" style={{ color: colors.slate }} />
-            Instellingen
-          </h1>
-          <p className="mt-1" style={{ color: colors.slate }}>Beheer je bedrijfsgegevens en voorkeuren</p>
-        </div>
-
-        {/* Company Info */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="border-b" style={{ background: `linear-gradient(to right, ${colors.stone}, ${colors.warmWhite})` }}>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2" style={{ color: colors.dark }}>
-              <Building2 className="w-5 h-5" style={{ color: colors.blue }} />
-              Bedrijfsgegevens
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  Bedrijfsnaam
-                </label>
-                <Input
-                  value={settings.company_name}
-                  onChange={(e) => updateSetting('company_name', e.target.value)}
-                  placeholder="Jouw Hoveniersbedrijf"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  Naam eigenaar
-                </label>
-                <Input
-                  value={settings.owner_name}
-                  onChange={(e) => updateSetting('owner_name', e.target.value)}
-                  placeholder="Jan Jansen"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                <MapPin className="w-4 h-4 inline mr-1" />
-                Adres
-              </label>
-              <Input
-                value={settings.address}
-                onChange={(e) => updateSetting('address', e.target.value)}
-                placeholder="Tuinstraat 123"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  Postcode
-                </label>
-                <Input
-                  value={settings.postal_code}
-                  onChange={(e) => updateSetting('postal_code', e.target.value)}
-                  placeholder="1234 AB"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  Plaats
-                </label>
-                <Input
-                  value={settings.city}
-                  onChange={(e) => updateSetting('city', e.target.value)}
-                  placeholder="Amsterdam"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contact Info */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="border-b" style={{ background: `linear-gradient(to right, ${colors.stone}, ${colors.warmWhite})` }}>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2" style={{ color: colors.dark }}>
-              <Phone className="w-5 h-5" style={{ color: colors.success }} />
-              Contactgegevens
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  <Phone className="w-4 h-4 inline mr-1" />
-                  Telefoonnummer
-                </label>
-                <Input
-                  value={settings.phone}
-                  onChange={(e) => updateSetting('phone', e.target.value)}
-                  placeholder="06 12345678"
-                  type="tel"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  <Mail className="w-4 h-4 inline mr-1" />
-                  E-mailadres
-                </label>
-                <Input
-                  value={settings.email}
-                  onChange={(e) => updateSetting('email', e.target.value)}
-                  placeholder="info@jouwbedrijf.nl"
-                  type="email"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Business Details */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="border-b" style={{ background: `linear-gradient(to right, ${colors.stone}, ${colors.warmWhite})` }}>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2" style={{ color: colors.dark }}>
-              <FileText className="w-5 h-5" style={{ color: colors.blue }} />
-              Zakelijke gegevens
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  KvK-nummer
-                </label>
-                <Input
-                  value={settings.kvk_number}
-                  onChange={(e) => updateSetting('kvk_number', e.target.value)}
-                  placeholder="12345678"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                  BTW-nummer
-                </label>
-                <Input
-                  value={settings.btw_number}
-                  onChange={(e) => updateSetting('btw_number', e.target.value)}
-                  placeholder="NL123456789B01"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: colors.dark }}>
-                <CreditCard className="w-4 h-4 inline mr-1" />
-                IBAN
-              </label>
-              <Input
-                value={settings.iban}
-                onChange={(e) => updateSetting('iban', e.target.value)}
-                placeholder="NL00 BANK 0123 4567 89"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Module Instellingen */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="border-b" style={{ background: `linear-gradient(to right, ${colors.stone}, ${colors.warmWhite})` }}>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2" style={{ color: colors.dark }}>
-              <Settings className="w-5 h-5" style={{ color: colors.orange }} />
-              Module Instellingen
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Link
-              href="/admin/instellingen/offertes"
-              className="flex items-center justify-between p-4 transition-colors border-b"
-              style={{ ['--hover-bg' as string]: colors.stone }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: colors.orangeLight }}>
-                  <FileEdit className="w-5 h-5" style={{ color: colors.orange }} />
-                </div>
-                <div>
-                  <p className="font-medium" style={{ color: colors.dark }}>Offerte Instellingen</p>
-                  <p className="text-sm" style={{ color: colors.slate }}>Logo, teksten, betalingsgegevens en weergave opties</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5" style={{ color: colors.slate }} />
-            </Link>
-            <Link
-              href="/admin/instellingen/arbeidsregels"
-              className="flex items-center justify-between p-4 transition-colors border-b"
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: colors.blueLight }}>
-                  <Wrench className="w-5 h-5" style={{ color: colors.blue }} />
-                </div>
-                <div>
-                  <p className="font-medium" style={{ color: colors.dark }}>Arbeidsregels</p>
-                  <p className="text-sm" style={{ color: colors.slate }}>Werkzaamheden met gekoppelde taken voor AI-analyse</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5" style={{ color: colors.slate }} />
-            </Link>
-            <Link
-              href="/admin/instellingen/formules"
-              className="flex items-center justify-between p-4 transition-colors border-b"
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: colors.blueLight }}>
-                  <Calculator className="w-5 h-5" style={{ color: colors.blue }} />
-                </div>
-                <div>
-                  <p className="font-medium" style={{ color: colors.dark }}>Berekeningsformules</p>
-                  <p className="text-sm" style={{ color: colors.slate }}>Formules voor automatische materiaalberekeningen</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5" style={{ color: colors.slate }} />
-            </Link>
-            <Link
-              href="/admin/instellingen/koppelingen"
-              className="flex items-center justify-between p-4 transition-colors border-b"
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: colors.successLight }}>
-                  <Link2 className="w-5 h-5" style={{ color: colors.success }} />
-                </div>
-                <div>
-                  <p className="font-medium" style={{ color: colors.dark }}>Materiaal Koppelingen</p>
-                  <p className="text-sm" style={{ color: colors.slate }}>Koppel materialen aan werkzaamheden</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5" style={{ color: colors.slate }} />
-            </Link>
-            <Link
-              href="/admin/prijzen"
-              className="flex items-center justify-between p-4 transition-colors"
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: colors.orangeLight }}>
-                  <Euro className="w-5 h-5" style={{ color: colors.orange }} />
-                </div>
-                <div>
-                  <p className="font-medium" style={{ color: colors.dark }}>Prijsbibliotheek</p>
-                  <p className="text-sm" style={{ color: colors.slate }}>Beheer materiaal- en arbeidsprijzen</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5" style={{ color: colors.slate }} />
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <Button
-            variant="outline"
-            onClick={handleResetOnboarding}
-            className="gap-2"
-            style={{ borderColor: colors.mist, color: colors.dark }}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Onboarding opnieuw starten
-          </Button>
-
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="gap-2 text-white"
-            style={{ backgroundColor: colors.orange }}
-          >
-            {saving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Opslaan...
-              </>
-            ) : saved ? (
-              <>
-                <Check className="w-4 h-4" />
-                Opgeslagen!
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Opslaan
-              </>
-            )}
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Instellingen</h1>
+            <p className="text-slate-500">
+              Opgeslagen in de database — werkt direct door in de offerte-generator.
+            </p>
+          </div>
+          <Button onClick={handleSave} disabled={saving}>
+            {saved ? <Check className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+            {saving ? 'Opslaan…' : saved ? 'Opgeslagen' : 'Opslaan'}
           </Button>
         </div>
+
+        {error && (
+          <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+            {error}
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-2 border-b border-slate-200">
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition ${
+                tab === key
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'layout' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Offertelay-out</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Field label="Prijsmethode (default)">
+                <Select
+                  value={str('default_pricing_method') || 'uitgesplitst'}
+                  onChange={(v) => set('default_pricing_method', v)}
+                  options={[
+                    { value: 'meterprijs', label: 'Meterprijs / aanneemsom' },
+                    { value: 'uitgesplitst', label: 'Uitgesplitst (arbeid + materiaal)' },
+                    { value: 'uren', label: 'Uren × uurtarief' },
+                  ]}
+                />
+              </Field>
+              <Field label="Arbeid weergave">
+                <Select
+                  value={str('default_labor_display') || 'per_post'}
+                  onChange={(v) => set('default_labor_display', v)}
+                  options={[
+                    { value: 'per_post', label: 'Per post' },
+                    { value: 'totaalpost', label: 'Als totaalpost' },
+                    { value: 'verborgen', label: 'Verborgen' },
+                  ]}
+                />
+              </Field>
+              <Field label="Standaard BTW-tarief (%)">
+                <Input
+                  type="number"
+                  value={num('default_vat_pct', 21)}
+                  onChange={(e) => set('default_vat_pct', Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Geldigheidsduur offerte (dagen)">
+                <Input
+                  type="number"
+                  value={num('default_validity_days', 30)}
+                  onChange={(e) => set('default_validity_days', Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Prijsgeldigheidsclausule">
+                <textarea
+                  className="min-h-[90px] w-full rounded-md border border-slate-300 p-2 text-sm"
+                  value={str('price_validity_clause')}
+                  onChange={(e) => set('price_validity_clause', e.target.value)}
+                />
+              </Field>
+              <Toggle
+                label="BTW-specificatie tonen op offerte"
+                checked={bool('show_btw_specification')}
+                onChange={(v) => set('show_btw_specification', v)}
+              />
+              <Toggle
+                label="3-varianten modus (Goed / Beter / Best)"
+                checked={bool('enable_good_better_best')}
+                onChange={(v) => set('enable_good_better_best', v)}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'arbeid' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Arbeidstarieven</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Field label="Uurtarief excl. BTW (€) — koppelprijs">
+                <Input
+                  type="number"
+                  value={num('default_hourly_rate', 85)}
+                  onChange={(e) => set('default_hourly_rate', Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Uren per werkdag">
+                <Input
+                  type="number"
+                  value={num('min_hours_per_day', 8)}
+                  onChange={(e) => set('min_hours_per_day', Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Afrondingsregel (dagen)">
+                <Select
+                  value={str('day_rounding') || 'ceil'}
+                  onChange={(v) => set('day_rounding', v)}
+                  options={[
+                    { value: 'ceil', label: 'Naar boven' },
+                    { value: 'round', label: 'Exact (afronden)' },
+                    { value: 'floor', label: 'Naar beneden' },
+                  ]}
+                />
+              </Field>
+              <Field label="CROW dagproductie (m² per dag)">
+                <Input
+                  type="number"
+                  value={num('crow_m2_per_day', 40)}
+                  onChange={(e) => set('crow_m2_per_day', Number(e.target.value))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'marges' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Materiaalmarges</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Field label="Standaard inkoopopslag (%)">
+                <Input
+                  type="number"
+                  value={num('material_markup_pct', 20)}
+                  onChange={(e) => set('material_markup_pct', Number(e.target.value))}
+                />
+              </Field>
+              <p className="text-sm text-slate-500">
+                Opslag op inkoopprijzen. Per-categorie overrides volgen in een latere sprint.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'bedrijf' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Bedrijfsgegevens</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Field label="Bedrijfsnaam">
+                <Input value={str('company_name')} onChange={(e) => set('company_name', e.target.value)} />
+              </Field>
+              <Field label="Adres">
+                <Input value={str('company_address')} onChange={(e) => set('company_address', e.target.value)} />
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Telefoon">
+                  <Input value={str('company_phone')} onChange={(e) => set('company_phone', e.target.value)} />
+                </Field>
+                <Field label="E-mail">
+                  <Input value={str('company_email')} onChange={(e) => set('company_email', e.target.value)} />
+                </Field>
+                <Field label="KvK-nummer">
+                  <Input value={str('company_kvk')} onChange={(e) => set('company_kvk', e.target.value)} />
+                </Field>
+                <Field label="BTW-identificatienummer">
+                  <Input value={str('company_btw')} onChange={(e) => set('company_btw', e.target.value)} />
+                </Field>
+                <Field label="IBAN">
+                  <Input value={str('company_iban')} onChange={(e) => set('company_iban', e.target.value)} />
+                </Field>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AdminLayout>
+  );
+}
+
+/** Verwijdert read-only/afgeleide velden voor de PATCH-payload. */
+function stripReadOnly(s: Settings): Settings {
+  const copy = { ...s };
+  delete copy.id;
+  delete copy.created_at;
+  delete copy.updated_at;
+  return copy;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-orange-500"
+      />
+    </label>
+  );
+}
+
+function Select({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-md border border-slate-300 bg-white p-2 text-sm"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
