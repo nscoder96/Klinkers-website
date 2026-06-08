@@ -175,11 +175,22 @@ export function expandAssembly(
     cunet_m3: cunet,
   };
 
+  // Gouda-vlaggen alleen als de assembly de variabele daadwerkelijk gebruikt:
+  // herstraten kent geen afgraaf-/zandcomponent en mag dus niet vlaggen.
+  const usesDepth = components.some(
+    (c) =>
+      c.quantity_formula?.includes("afgraafdiepte_cm") ||
+      c.quantity_formula?.includes("cunet_m3")
+  );
+  const usesZand = components.some((c) =>
+    c.quantity_formula?.includes("zanddikte_cm")
+  );
+
   const quoteFlags: string[] = [];
-  if (!hasDepth) {
+  if (usesDepth && !hasDepth) {
     quoteFlags.push("⚠️ Afgraafdiepte niet opgegeven — controleer voor berekening");
   }
-  if (!hasZand) {
+  if (usesZand && !hasZand) {
     quoteFlags.push("⚠️ Zanddikte niet opgegeven — minimaal 8 cm, controleer");
   }
 
