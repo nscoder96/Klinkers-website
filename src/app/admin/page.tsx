@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
+import CBSPriceAlertBanner from '@/components/admin/CBSPriceAlertBanner';
 import {
   Users,
   FileText,
@@ -153,6 +154,7 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="space-y-8">
+        <CBSPriceAlertBanner />
         {/* Welcome Section */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
