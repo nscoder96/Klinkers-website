@@ -3,31 +3,27 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   MessageSquare,
   FileText,
-  Users,
-  Clock,
-  CheckCircle,
   ArrowRight,
   Play,
   Zap,
-  Shield,
   TrendingUp,
-  Phone,
   Mail,
   X,
-  Sparkles,
-  Calculator,
-  Send,
-  BarChart3
+  Leaf,
+  Menu,
+  Check,
+  CheckCircle,
+  MoreHorizontal,
+  Plus
 } from 'lucide-react';
 
 export default function VoorHoveniersPage() {
   const [showContactForm, setShowContactForm] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     company: '',
@@ -37,526 +33,520 @@ export default function VoorHoveniersPage() {
   });
   const [formSubmitted, setFormSubmitted] = useState(false);
 
-  // Replace with your actual video URL
-  const demoVideoUrl = ''; // Example: 'https://www.youtube.com/embed/VIDEO_ID' or 'https://player.vimeo.com/video/VIDEO_ID'
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you could send to an API endpoint
-    console.log('Form submitted:', formData);
-    setFormSubmitted(true);
+    // Simulate API call
+    setTimeout(() => setFormSubmitted(true), 1000);
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold text-slate-800">
-            Klinkers & Co <span className="text-orange-500">Software</span>
-          </Link>
-          <Button
-            onClick={() => setShowContactForm(true)}
-            className="bg-orange-500 hover:bg-orange-600"
-          >
-            Gratis Demo Aanvragen
-          </Button>
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-orange-500/30">
+
+      {/* Navigation */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-3 group">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
+                <Leaf className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">
+                TuinPro
+              </span>
+            </Link>
+
+            {/* Desktop Nav */}
+            <nav className="hidden md:flex items-center gap-8">
+              <a href="#features" className="text-sm font-medium text-slate-600 hover:text-orange-500 transition-colors">Features</a>
+              <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-orange-500 transition-colors">Hoe het werkt</a>
+              <a href="#testimonials" className="text-sm font-medium text-slate-600 hover:text-orange-500 transition-colors">Ervaringen</a>
+              <a href="#faq" className="text-sm font-medium text-slate-600 hover:text-orange-500 transition-colors">FAQ</a>
+            </nav>
+
+            {/* CTA */}
+            <div className="hidden md:flex items-center gap-4">
+              <Link href="/login" className="text-sm font-medium text-slate-900 hover:text-orange-500 transition-colors">
+                Inloggen
+              </Link>
+              <Button
+                onClick={() => setShowContactForm(true)}
+                className="bg-slate-900 hover:bg-slate-800 text-white rounded-full px-6 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-300"
+              >
+                Gratis Demo
+              </Button>
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="md:hidden p-2 text-slate-600"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="absolute top-20 left-0 right-0 bg-white border-b border-slate-100 p-4 flex flex-col gap-4 md:hidden animate-slide-up shadow-xl">
+            <a href="#features" className="text-base font-medium text-slate-600 p-2" onClick={() => setMobileMenuOpen(false)}>Features</a>
+            <a href="#how-it-works" className="text-base font-medium text-slate-600 p-2" onClick={() => setMobileMenuOpen(false)}>Hoe het werkt</a>
+            <Button onClick={() => { setShowContactForm(true); setMobileMenuOpen(false); }} className="w-full bg-orange-500">
+              Gratis Demo
+            </Button>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 lg:py-32">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 bg-orange-500/20 text-orange-400 px-4 py-2 rounded-full text-sm font-medium mb-6">
-              <Sparkles className="w-4 h-4" />
-              Gebouwd door een hovenier, voor hoveniers
+      <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-slate-50">
+        {/* Background Gradients */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-slate-900/10 to-transparent" />
+        <div className="absolute inset-0">
+          <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-purple-500/5 blur-3xl animate-float-slow" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-orange-500/5 blur-3xl animate-float" />
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm mb-8 animate-fade-in-up">
+            <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">AI-Powered Klantenservice</span>
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1]">
+            <span className="block">Van notitie naar offerte</span>
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-500 via-orange-600 to-purple-600">
+              in 5 minuten
+            </span>
+          </h1>
+
+          <p className="mt-6 text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+            Geen avonden meer achter de laptop. Type je notities, laat AI het rekenwerk doen en verstuur direct een professionele offerte.
+          </p>
+
+          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button
+              size="lg"
+              onClick={() => setShowContactForm(true)}
+              className="h-14 px-8 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg shadow-orange-500/25 transition-all hover:scale-105"
+            >
+              Start Gratis Demo
+              <ArrowRight className="ml-2 w-5 h-5" />
+            </Button>
+
+            <a href="#how-it-works" className="group flex items-center gap-3 px-6 py-4 rounded-full bg-white border border-slate-200 text-slate-600 font-medium hover:border-slate-300 transition-all">
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
+                <Play className="w-4 h-4 fill-slate-900 group-hover:fill-orange-600 text-slate-900 group-hover:text-orange-600 transition-colors" />
+              </div>
+              Bekijk video
+            </a>
+          </div>
+
+          <div className="mt-12 flex items-center justify-center gap-8 text-sm text-slate-500">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span>Bespaar 10+ uur per week</span>
             </div>
-            <h1 className="text-4xl lg:text-6xl font-bold mb-6 leading-tight">
-              Stop met uren besteden aan{' '}
-              <span className="text-orange-500">offertes</span> en{' '}
-              <span className="text-orange-500">administratie</span>
-            </h1>
-            <p className="text-xl text-slate-300 mb-8 leading-relaxed">
-              Het complete systeem dat automatisch leads opvangt, met AI offertes genereert,
-              en klanten online laat accepteren. Speciaal ontwikkeld voor hoveniersbedrijven.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button
-                size="lg"
-                onClick={() => setShowContactForm(true)}
-                className="bg-orange-500 hover:bg-orange-600 text-lg px-8"
-              >
-                Gratis Demo Aanvragen
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-slate-600 text-white hover:bg-slate-800 text-lg"
-                onClick={() => document.getElementById('demo-video')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                <Play className="w-5 h-5 mr-2" />
-                Bekijk Demo Video
-              </Button>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span>Meer gewonnen klussen</span>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Problem Section */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold text-slate-800 mb-4">
-              Herkenbaar?
-            </h2>
-            <p className="text-xl text-slate-600">
-              Dit zijn de problemen waar iedere hovenier tegenaan loopt
-            </p>
-          </div>
+        {/* Hero Product - Realistic Mockup */}
+        <div className="relative mt-20 max-w-6xl mx-auto px-4">
+          <div className="relative rounded-2xl bg-slate-900 p-3 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/10 backdrop-blur-3xl">
+            {/* Window Controls */}
+            <div className="absolute top-0 left-0 right-0 h-10 flex items-center px-4 gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+              <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+            </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Clock,
-                title: "'s Avonds nog offertes maken",
-                description: "Na een lange dag buiten nog achter de laptop om offertes uit te typen. Terwijl je eigenlijk bij je gezin wilt zijn."
-              },
-              {
-                icon: MessageSquare,
-                title: "Leads die weglekken",
-                description: "Mensen bellen of mailen, maar in de drukte vergeet je terug te bellen. Die klus gaat naar de concurrent."
-              },
-              {
-                icon: FileText,
-                title: "Offertes in Word of Excel",
-                description: "Elke offerte handmatig opmaken. Copy-paste fouten. Geen overzicht van wat er uitstaat."
-              },
-              {
-                icon: Phone,
-                title: "WhatsApp chaos",
-                description: "Klantgesprekken verspreid over 10 verschillende chats. Wie had ook alweer een offerte nodig?"
-              },
-              {
-                icon: Users,
-                title: "Geen klantoverzicht",
-                description: "Klantgegevens in je hoofd, op briefjes, of ergens in je telefoon. Onvindbaar als je het nodig hebt."
-              },
-              {
-                icon: TrendingUp,
-                title: "Geen inzicht in je bedrijf",
-                description: "Hoeveel offertes staan er uit? Wat is je conversie? Geen idee - je runt op gevoel."
-              }
-            ].map((problem, i) => (
-              <Card key={i} className="border-red-100 bg-red-50/50">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
-                    <problem.icon className="w-6 h-6 text-red-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">{problem.title}</h3>
-                  <p className="text-slate-600">{problem.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+            {/* Inner Content - The "Realistic View" */}
+            <div className="rounded-xl overflow-hidden bg-slate-50 mt-8 shadow-inner border border-slate-200 relative aspect-[16/10] md:aspect-[16/9] flex flex-col">
 
-      {/* Solution Section */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold text-slate-800 mb-4">
-              De Oplossing
-            </h2>
-            <p className="text-xl text-slate-600">
-              Eén systeem dat alles voor je regelt
-            </p>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              {[
-                {
-                  icon: MessageSquare,
-                  title: "AI Chat vangt leads op",
-                  description: "24/7 een slimme chatbot op je website die vragen beantwoordt en contactgegevens verzamelt. Jij wordt genotificeerd, de lead staat klaar."
-                },
-                {
-                  icon: Calculator,
-                  title: "AI genereert offertes",
-                  description: "Beschrijf de klus in je eigen woorden. De AI berekent automatisch materialen, uren en prijzen. Offerte klaar in 2 minuten."
-                },
-                {
-                  icon: Send,
-                  title: "Klant accepteert online",
-                  description: "Professionele PDF + online acceptatielink. Klant klikt op 'Akkoord' en je hebt de opdracht binnen. Geen gedoe met printen of scannen."
-                },
-                {
-                  icon: BarChart3,
-                  title: "Volledig overzicht",
-                  description: "Dashboard met al je leads, offertes en projecten. Weet precies wat er speelt in je bedrijf."
-                }
-              ].map((solution, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <solution.icon className="w-6 h-6 text-green-600" />
+              {/* App Header */}
+              <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-10 shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
+                    <FileText className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-1">{solution.title}</h3>
-                    <p className="text-slate-600">{solution.description}</p>
+                    <h3 className="font-semibold text-slate-900">Nieuwe Offerte - Fam. de Vries</h3>
+                    <p className="text-xs text-slate-500">Laatst opgeslagen: zojuist</p>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex gap-3">
+                  <div className="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-medium border border-green-100 flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                    AI Analyse Voltooid
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-slate-100"></div>
+                </div>
+              </div>
 
-            <div className="bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl p-8 lg:p-12">
-              <div className="text-center">
-                <div className="text-6xl font-bold text-orange-500 mb-2">5+</div>
-                <div className="text-xl text-slate-700 mb-6">uur per week besparen</div>
-                <div className="space-y-3 text-left">
-                  {[
-                    "Geen offertes meer typen 's avonds",
-                    "Geen leads meer vergeten",
-                    "Geen Excel-gedoe meer",
-                    "Professionele uitstraling naar klanten"
-                  ].map((benefit, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      <span className="text-slate-700">{benefit}</span>
+              {/* App Body - Split View */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Left: Input */}
+                <div className="w-1/2 p-6 border-r border-slate-200 bg-white flex flex-col">
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">Jouw Notities</label>
+                    <div className="h-full bg-slate-50 rounded-lg p-4 font-mono text-sm text-slate-600 leading-relaxed border border-slate-200 shadow-sm relative overflow-hidden">
+                      <p>Klant wil voortuin renovatie.</p>
+                      <p className="mt-2">- 40m2 bestrating (Abbey stones)</p>
+                      <p>- 2x plantenbak verhoogd (stapelblokken antraciet)</p>
+                      <p>- 15m beukenhaag</p>
+                      <p>- Oude bestrating afvoeren</p>
+                      <p className="mt-4 text-slate-400">// Berekenen inclusief arbeid en wit zand</p>
+
+                      <div className="absolute bottom-4 right-4 animate-bounce">
+                        <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded shadow">AI Leest mee...</div>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                </div>
+
+                {/* Right: Output */}
+                <div className="w-1/2 bg-slate-50/50 p-6 flex flex-col relative">
+                  <div className="absolute inset-0 bg-white/50 backdrop-blur-[2px] z-0"></div> {/* Subtle blur to emphasize "magic" */}
+
+                  <label className="text-xs font-bold text-orange-600 uppercase tracking-wide mb-2 block relative z-10 flex items-center gap-2">
+                    <Zap className="w-3 h-3" /> Gegenereerd Resultaat
+                  </label>
+
+                  <div className="bg-white rounded-lg shadow-sm border border-slate-200 flex-1 relative z-10 overflow-hidden flex flex-col">
+                    {/* Quote Table Mockup */}
+                    <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2 flex text-xs font-medium text-slate-500">
+                      <div className="flex-1">Omschrijving</div>
+                      <div className="w-16 text-right">Aantal</div>
+                      <div className="w-20 text-right">Totaal</div>
+                    </div>
+
+                    <div className="p-2 space-y-1">
+                      {/* Item 1 */}
+                      <div className="flex items-center px-2 py-2 rounded hover:bg-slate-50 text-sm group">
+                        <div className="flex-1">
+                          <div className="font-medium text-slate-900">Abbey Stones 20x30</div>
+                          <div className="text-xs text-slate-500">Kleur: Zwart/Grijs</div>
+                        </div>
+                        <div className="w-16 text-right text-slate-600">42 m2</div>
+                        <div className="w-20 text-right font-medium text-slate-900">€ 1.890</div>
+                      </div>
+                      {/* Item 2 */}
+                      <div className="flex items-center px-2 py-2 rounded hover:bg-slate-50 text-sm group">
+                        <div className="flex-1">
+                          <div className="font-medium text-slate-900">Stapelblokken Antraciet</div>
+                        </div>
+                        <div className="w-16 text-right text-slate-600">60 st</div>
+                        <div className="w-20 text-right font-medium text-slate-900">€ 450</div>
+                      </div>
+                      {/* Item 3 */}
+                      <div className="flex items-center px-2 py-2 rounded hover:bg-slate-50 text-sm group">
+                        <div className="flex-1">
+                          <div className="font-medium text-slate-900">Arbeidsuren stratenmaker</div>
+                          <div className="text-xs text-green-600 flex items-center gap-1">
+                            <Zap className="w-3 h-3" /> Auto-berekend
+                          </div>
+                        </div>
+                        <div className="w-16 text-right text-slate-600">16 uur</div>
+                        <div className="w-20 text-right font-medium text-slate-900">€ 880</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto bg-slate-50 p-4 border-t border-slate-200 flex justify-between items-center">
+                      <div className="text-sm font-medium text-slate-500">Totaal incl. BTW</div>
+                      <div className="text-xl font-bold text-slate-900">€ 3.896,20</div>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="mt-4 text-center relative z-10">
+                    <Button className="bg-orange-500 hover:bg-orange-600 text-white w-full shadow-lg shadow-orange-500/20">
+                      Verstuur naar Klant
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Demo Video Section */}
-      <section id="demo-video" className="py-20 bg-slate-900 text-white">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl lg:text-4xl font-bold mb-4">
-              Zie het in actie
-            </h2>
-            <p className="text-xl text-slate-400">
-              In 5 minuten zie je precies hoe het werkt
-            </p>
-          </div>
-
-          <div className="aspect-video bg-slate-800 rounded-2xl overflow-hidden border border-slate-700">
-            {demoVideoUrl ? (
-              <iframe
-                src={demoVideoUrl}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title="Product Demo"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
-                <Play className="w-16 h-16 mb-4" />
-                <p className="text-lg">Demo video komt binnenkort</p>
-                <p className="text-sm mt-2">Vraag een live demo aan voor nu</p>
+            {/* Floating 'Result' Badge */}
+            <div className="absolute -right-4 top-1/2 -translate-y-1/2 bg-white p-4 rounded-xl shadow-xl border border-slate-100 hidden md:block animate-float">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 font-medium">Tijdsbesparing</div>
+                  <div className="text-sm font-bold text-slate-900">45 minuten</div>
+                </div>
               </div>
-            )}
+            </div>
+
           </div>
         </div>
       </section>
 
-      {/* Features Grid */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold text-slate-800 mb-4">
-              Alle Features
-            </h2>
-            <p className="text-xl text-slate-600">
-              Alles wat je nodig hebt in één pakket
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: MessageSquare,
-                title: "AI Chatbot",
-                description: "Slimme chat op je website die vragen beantwoordt over jouw diensten en leads verzamelt."
-              },
-              {
-                icon: Sparkles,
-                title: "AI Offerte Generator",
-                description: "Beschrijf de klus, AI berekent materialen en prijzen automatisch op basis van jouw tarieven."
-              },
-              {
-                icon: FileText,
-                title: "Professionele PDF Offertes",
-                description: "Mooi opgemaakte offertes met jouw logo en bedrijfsgegevens. Direct te downloaden of mailen."
-              },
-              {
-                icon: CheckCircle,
-                title: "Online Acceptatie",
-                description: "Klanten accepteren of wijzen af via een link. Geen printen, scannen of heen-en-weer mailen."
-              },
-              {
-                icon: Users,
-                title: "Lead & Klant Beheer",
-                description: "Alle klantgegevens op één plek. Contacthistorie, offertes en notities overzichtelijk bij elkaar."
-              },
-              {
-                icon: BarChart3,
-                title: "Dashboard & Statistieken",
-                description: "Zie in één oogopslag: openstaande offertes, nieuwe leads, omzet deze maand."
-              },
-              {
-                icon: Zap,
-                title: "Snel & Eenvoudig",
-                description: "Geen cursus nodig. Intuïtieve interface die je binnen 10 minuten begrijpt."
-              },
-              {
-                icon: Shield,
-                title: "Veilig & Betrouwbaar",
-                description: "Je data staat veilig in de cloud. Altijd en overal toegang, ook op je telefoon."
-              },
-              {
-                icon: TrendingUp,
-                title: "Prijzen Database",
-                description: "Beheer je eigen prijzen voor materialen en werkzaamheden. AI gebruikt deze voor offertes."
-              }
-            ].map((feature, i) => (
-              <Card key={i} className="hover:shadow-lg transition-shadow">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-                    <feature.icon className="w-6 h-6 text-orange-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">{feature.title}</h3>
-                  <p className="text-slate-600">{feature.description}</p>
-                </CardContent>
-              </Card>
+      {/* Social Proof */}
+      <section className="py-12 bg-white border-y border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-8">
+            Al gebruikt door 50+ hoveniers in Nederland
+          </p>
+          <div className="flex flex-wrap justify-center gap-12 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+            {/* Simulated Logos */}
+            {['GroenTotaal', 'De Hovenier', 'Tuin & Co', 'Het Buitenleven'].map((name, i) => (
+              <div key={i} className="text-xl font-bold font-serif text-slate-800 flex items-center gap-2">
+                <Leaf className="w-5 h-5" /> {name}
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Social Proof / Trust */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl lg:text-4xl font-bold text-slate-800 mb-4">
-              Gebouwd vanuit de praktijk
-            </h2>
+      {/* Features Grid (Bento Style) */}
+      <section id="features" className="py-24 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-20">
+            <h2 className="text-3xl md:text-5xl font-bold text-slate-900 mb-6">Alles wat je nodig hebt om te groeien</h2>
+            <p className="text-lg text-slate-600">Van eerste contact tot factuur. Wij automatiseren de saaie taken zodat jij je kunt focussen op de tuin.</p>
           </div>
 
-          <div className="max-w-3xl mx-auto">
-            <Card className="border-orange-200 bg-orange-50/50">
-              <CardContent className="p-8 lg:p-12">
-                <p className="text-lg text-slate-700 mb-6 leading-relaxed">
-                  "Ik ben zelf hovenier in Gouda. Na jaren van 's avonds offertes typen,
-                  leads vergeten en chaos in mijn administratie, besloot ik het anders aan te pakken.
-                </p>
-                <p className="text-lg text-slate-700 mb-6 leading-relaxed">
-                  Ik heb dit systeem gebouwd voor mijn eigen bedrijf. Het bespaart me uren per week
-                  en mijn klanten zijn onder de indruk van de professionele aanpak.
-                </p>
-                <p className="text-lg text-slate-700 leading-relaxed">
-                  Nu wil ik andere hoveniers helpen om ook slimmer te werken - niet harder."
-                </p>
-                <div className="mt-8 flex items-center gap-4">
-                  <div className="w-14 h-14 bg-slate-300 rounded-full flex items-center justify-center text-slate-600 font-bold text-xl">
-                    N
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+            {/* Feature 1 - Large */}
+            <div className="md:col-span-2 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 group overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <MessageSquare className="w-48 h-48 text-orange-500" />
+              </div>
+              <div className="relative z-10">
+                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center mb-6">
+                  <MessageSquare className="w-6 h-6 text-orange-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-3">AI Receptioniste 24/7</h3>
+                <p className="text-slate-600 mb-8 max-w-md">De slimme chatbot op je website beantwoordt vragen en filtert serieuze klanten. Krijg alleen leads binnen die klaar zijn voor een offerte.</p>
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 max-w-md">
+                  <div className="flex gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-200" />
+                    <div className="bg-white p-3 rounded-tr-xl rounded-b-xl shadow-sm text-sm text-slate-600">
+                      Hoi, ik wil graag een offerte voor bestrating van 40m2.
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-semibold text-slate-800">Niek</div>
-                    <div className="text-slate-600">Eigenaar Klinkers & Co</div>
+                  <div className="flex gap-3 justify-end">
+                    <div className="bg-orange-500 p-3 rounded-tl-xl rounded-b-xl shadow-sm text-sm text-white">
+                      Natuurlijk! Om welke regio gaat het?
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center">
+                      <Leaf className="w-4 h-4 text-orange-600" />
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
+              <div className="relative z-10 h-full flex flex-col">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center mb-6">
+                  <Zap className="w-6 h-6 text-orange-400" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3">Offertes in seconden</h3>
+                <p className="text-slate-400 mb-6 flex-1">Jij spreekt in, AI schrijft en berekent. Klaar in 2 minuten.</p>
+                <ul className="space-y-3">
+                  {['Spraak naar tekst', 'Automatische berekening', 'Direct als PDF'].map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-300">
+                      <Check className="w-4 h-4 text-green-400" /> {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 group">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center mb-6">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-3">Online Acceptatie</h3>
+              <p className="text-slate-600">Klanten accepteren met één klik. Geen gedoe met printen en scannen. Juridisch dichtgetimmerd.</p>
+              <Button variant="outline" className="mt-6 w-full group-hover:bg-blue-50 group-hover:text-blue-600 group-hover:border-blue-200">
+                Bekijk voorbeeld
+              </Button>
+            </div>
+
+            {/* Feature 4 - Large */}
+            <div className="md:col-span-2 bg-gradient-to-br from-orange-50 to-white rounded-3xl p-8 border border-orange-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden">
+              <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center">
+                <div className="flex-1">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center mb-6">
+                    <TrendingUp className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-3">Inzicht in je cijfers</h3>
+                  <p className="text-slate-600 mb-6">Weet precies wat je omzet is, welke offertes nog open staan en hoeveel werk er aan komt.</p>
+                  <Button className="bg-orange-500 hover:bg-orange-600 text-white rounded-full">
+                    Start Dashboard Demo
+                  </Button>
+                </div>
+                <div className="w-full md:w-1/2">
+                  <div className="bg-white rounded-xl shadow-lg border border-slate-100 p-4">
+                    <div className="flex justify-between items-end mb-4">
+                      <div>
+                        <div className="text-sm text-slate-500">Omzet deze maand</div>
+                        <div className="text-3xl font-bold text-slate-900">€ 24.500</div>
+                      </div>
+                      <div className="text-green-500 text-sm font-semibold bg-green-50 px-2 py-1 rounded">+12%</div>
+                    </div>
+                    <div className="h-24 flex items-end gap-2">
+                      {[40, 60, 45, 70, 85, 65, 90].map((h, i) => (
+                        <div key={i} style={{ height: `${h}%` }} className="flex-1 bg-orange-100 rounded-t-sm hover:bg-orange-500 transition-colors" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-orange-500 to-orange-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl lg:text-4xl font-bold mb-6">
-            Klaar om slimmer te werken?
-          </h2>
-          <p className="text-xl text-orange-100 mb-8 max-w-2xl mx-auto">
-            Vraag een gratis demo aan en ontdek hoe dit systeem jouw hoveniersbedrijf kan transformeren.
-          </p>
-          <Button
-            size="lg"
-            onClick={() => setShowContactForm(true)}
-            className="bg-white text-orange-600 hover:bg-orange-50 text-lg px-8"
-          >
-            Gratis Demo Aanvragen
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
-          <p className="mt-4 text-orange-200 text-sm">
-            Geen verplichtingen • Persoonlijke demo • Antwoord binnen 24 uur
-          </p>
+      <section className="py-24 bg-slate-900 relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-orange-500/20 rounded-full blur-[100px]" />
+          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px]" />
         </div>
-      </section>
 
-      {/* FAQ */}
-      <section className="py-20">
-        <div className="max-w-3xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-slate-800 mb-12 text-center">
-            Veelgestelde Vragen
+        <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            Klaar om professioneler te werken?
           </h2>
+          <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
+            Probeer TuinPro gratis. Geen creditcard nodig. Stop wanneer je wilt.
+          </p>
 
-          <div className="space-y-6">
-            {[
-              {
-                q: "Wat kost het?",
-                a: "We hanteren een maandelijks abonnement. De exacte prijs bespreken we tijdens de demo, zodat we een pakket kunnen samenstellen dat past bij jouw bedrijf."
-              },
-              {
-                q: "Moet ik technisch zijn?",
-                a: "Absoluut niet. Als je een smartphone kunt gebruiken, kun je dit ook. We helpen je met de setup en geven een persoonlijke uitleg."
-              },
-              {
-                q: "Kan ik mijn eigen prijzen invoeren?",
-                a: "Ja, je beheert je eigen prijzen database. De AI gebruikt jouw tarieven voor materialen en uurlonen om offertes te berekenen."
-              },
-              {
-                q: "Werkt het op mijn telefoon?",
-                a: "Ja, het systeem werkt in elke browser - ook op je telefoon of tablet. Zo kun je onderweg snel een offerte maken of leads checken."
-              },
-              {
-                q: "Hoe zit het met mijn huidige klantgegevens?",
-                a: "We kunnen bestaande klantgegevens importeren. Dit bespreken we tijdens de setup."
-              },
-              {
-                q: "Is er een contract of opzegtermijn?",
-                a: "Maandelijks opzegbaar. Geen langlopende contracten. Je zit nergens aan vast."
-              }
-            ].map((faq, i) => (
-              <div key={i} className="border-b border-slate-200 pb-6">
-                <h3 className="text-lg font-semibold text-slate-800 mb-2">{faq.q}</h3>
-                <p className="text-slate-600">{faq.a}</p>
-              </div>
-            ))}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button
+              onClick={() => setShowContactForm(true)}
+              size="lg"
+              className="h-14 px-8 rounded-full bg-white text-slate-900 hover:bg-slate-100 font-bold text-lg"
+            >
+              Gratis Account Aanmaken
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="h-14 px-8 rounded-full border-slate-700 text-white bg-transparent hover:bg-slate-800 hover:text-white text-lg"
+            >
+              Plan een Demo
+            </Button>
           </div>
+          <p className="mt-8 text-sm text-slate-500">
+            Al 50+ hoveniers gingen je voor
+          </p>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-white py-12">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div>
-              <div className="text-xl font-bold mb-2">Klinkers & Co Software</div>
-              <p className="text-slate-400">Het slimme systeem voor hoveniers</p>
+      <footer className="bg-white py-16 border-t border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-4 gap-12 mb-12">
+            <div className="col-span-1 md:col-span-2">
+              <Link href="/" className="flex items-center gap-2 mb-6">
+                <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
+                  <Leaf className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-xl font-bold text-slate-900">TuinPro</span>
+              </Link>
+              <p className="text-slate-500 max-w-sm">
+                Software gemaakt door hoveniers, voor hoveniers. Wij helpen je bedrijf groeien zonder gedoe.
+              </p>
             </div>
-            <div className="flex items-center gap-6">
-              <a href="mailto:info@klinkersenco.nl" className="flex items-center gap-2 text-slate-400 hover:text-white">
-                <Mail className="w-5 h-5" />
-                info@klinkersenco.nl
-              </a>
-              <a href="tel:0653967819" className="flex items-center gap-2 text-slate-400 hover:text-white">
-                <Phone className="w-5 h-5" />
-                06 53 96 78 19
-              </a>
+
+            <div>
+              <h4 className="font-bold text-slate-900 mb-4">Product</h4>
+              <ul className="space-y-2 text-slate-600">
+                <li><a href="#" className="hover:text-orange-500">Features</a></li>
+                <li><a href="#" className="hover:text-orange-500">Prijzen</a></li>
+                <li><a href="#" className="hover:text-orange-500">Roadmap</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-slate-900 mb-4">Contact</h4>
+              <ul className="space-y-2 text-slate-600">
+                <li className="flex items-center gap-2"><Mail className="w-4 h-4" /> info@tuinpro.nl</li>
+                <li>KVK: 12345678</li>
+              </ul>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-slate-800 text-center text-slate-500 text-sm">
-            © {new Date().getFullYear()} Klinkers & Co. Alle rechten voorbehouden.
+
+          <div className="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
+            <p>© {new Date().getFullYear()} TuinPro. Alle rechten voorbehouden.</p>
+            <div className="flex gap-6 mt-4 md:mt-0">
+              <a href="#" className="hover:text-slate-900">Privacy</a>
+              <a href="#" className="hover:text-slate-900">Voorwaarden</a>
+            </div>
           </div>
         </div>
       </footer>
 
-      {/* Contact Form Modal */}
+      {/* Contact Modal */}
       {showContactForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-scale-in">
+            <div className="p-8">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-slate-800">Gratis Demo Aanvragen</h3>
-                <button
-                  onClick={() => setShowContactForm(false)}
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-6 h-6" />
+                <h3 className="text-2xl font-bold text-slate-900">Start Gratis Demo</h3>
+                <button onClick={() => setShowContactForm(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                  <X className="w-5 h-5 text-slate-500" />
                 </button>
               </div>
 
               {formSubmitted ? (
-                <div className="text-center py-8">
+                <div className="text-center py-10">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle className="w-8 h-8 text-green-600" />
                   </div>
-                  <h4 className="text-xl font-semibold text-slate-800 mb-2">Aanvraag ontvangen!</h4>
-                  <p className="text-slate-600">
-                    Ik neem binnen 24 uur contact met je op om een demo in te plannen.
-                  </p>
-                  <Button
-                    onClick={() => {
-                      setShowContactForm(false);
-                      setFormSubmitted(false);
-                    }}
-                    className="mt-6"
-                  >
-                    Sluiten
-                  </Button>
+                  <h4 className="text-xl font-bold text-slate-900 mb-2">Aanvraag Ontvangen!</h4>
+                  <p className="text-slate-600 mb-6">We nemen contact met je op om je account te activeren.</p>
+                  <Button onClick={() => setShowContactForm(false)} className="w-full">Sluiten</Button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-slate-700">Naam *</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Naam</label>
                     <Input
                       required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
                       placeholder="Jouw naam"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-slate-700">Bedrijfsnaam</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Bedrijfsnaam</label>
                     <Input
                       value={formData.company}
-                      onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                      placeholder="Je hoveniersbedrijf"
+                      onChange={e => setFormData({ ...formData, company: e.target.value })}
+                      placeholder="Naam van je bedrijf"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-slate-700">Email *</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
                     <Input
                       type="email"
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
                       placeholder="jouw@email.nl"
                     />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">Telefoonnummer</label>
-                    <Input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="06 12345678"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">Bericht (optioneel)</label>
-                    <Textarea
-                      value={formData.message}
-                      onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                      placeholder="Vertel iets over je bedrijf of stel een vraag..."
-                      rows={3}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600">
-                    Demo Aanvragen
-                    <ArrowRight className="w-5 h-5 ml-2" />
+                  <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg">
+                    Aanvragen
                   </Button>
-                  <p className="text-xs text-slate-500 text-center">
-                    Ik neem binnen 24 uur contact met je op
-                  </p>
                 </form>
               )}
             </div>

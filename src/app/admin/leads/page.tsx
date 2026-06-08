@@ -2,11 +2,29 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { Trash2, Leaf } from 'lucide-react';
+
+// Klinkers & Co Design System - Orange/Blue
+const colors = {
+  orange: '#FA5D29',
+  orangeLight: '#FFF4F1',
+  blue: '#49B3FC',
+  blueLight: '#F0F9FF',
+  dark: '#222222',
+  darkLight: '#2d2d2d',
+  slate: '#64748b',
+  stone: '#F8F8F8',
+  warmWhite: '#ffffff',
+  mist: '#ededed',
+  success: '#22c55e',
+  successLight: '#f0fdf4',
+};
 
 interface Lead {
   id: string;
@@ -24,6 +42,7 @@ interface Lead {
 
 export default function LeadsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
@@ -49,6 +68,31 @@ export default function LeadsPage() {
     }
   };
 
+  const deleteLead = async (e: React.MouseEvent, id: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Weet je zeker dat je lead "${name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/leads/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchLeads();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Kon lead niet verwijderen');
+      }
+    } catch (error) {
+      console.error('Error deleting lead:', error);
+      alert('Er ging iets mis bij het verwijderen');
+    }
+  };
+
   const filteredLeads = leads
     .filter(lead => filter === 'all' || lead.status === filter)
     .filter(lead =>
@@ -60,18 +104,18 @@ export default function LeadsPage() {
     )
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      new: 'bg-blue-100 text-blue-800 border-blue-200',
-      contacted: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      site_visit_scheduled: 'bg-purple-100 text-purple-800 border-purple-200',
-      quote_sent: 'bg-orange-100 text-orange-800 border-orange-200',
-      negotiating: 'bg-pink-100 text-pink-800 border-pink-200',
-      won: 'bg-green-100 text-green-800 border-green-200',
-      lost: 'bg-red-100 text-red-800 border-red-200',
-      dormant: 'bg-gray-100 text-gray-800 border-gray-200',
+  const getStatusStyle = (status: string) => {
+    const styles: Record<string, { bg: string; text: string; border: string }> = {
+      new: { bg: colors.orangeLight, text: colors.orange, border: 'rgba(250, 93, 41, 0.3)' },
+      contacted: { bg: colors.blueLight, text: colors.blue, border: 'rgba(73, 179, 252, 0.3)' },
+      site_visit_scheduled: { bg: colors.blueLight, text: colors.blue, border: 'rgba(73, 179, 252, 0.4)' },
+      quote_sent: { bg: colors.orangeLight, text: colors.orange, border: 'rgba(250, 93, 41, 0.4)' },
+      negotiating: { bg: 'rgba(100, 116, 139, 0.15)', text: colors.slate, border: 'rgba(100, 116, 139, 0.3)' },
+      won: { bg: colors.successLight, text: colors.success, border: colors.success },
+      lost: { bg: 'rgba(239, 68, 68, 0.1)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' },
+      dormant: { bg: colors.mist, text: colors.slate, border: colors.mist },
     };
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return styles[status] || styles.dormant;
   };
 
   const getStatusLabel = (status: string) => {
@@ -110,8 +154,22 @@ export default function LeadsPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Laden...</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: colors.stone }}>
+        <div className="text-center">
+          <div className="relative w-12 h-12 mx-auto mb-3">
+            <div
+              className="absolute inset-0 rounded-full animate-ping opacity-20"
+              style={{ backgroundColor: colors.orange }}
+            />
+            <div
+              className="relative w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: colors.orange }}
+            >
+              <Leaf className="w-6 h-6 text-white animate-pulse" />
+            </div>
+          </div>
+          <p style={{ color: colors.slate }}>Laden...</p>
+        </div>
       </div>
     );
   }
@@ -126,13 +184,13 @@ export default function LeadsPage() {
         {/* Page Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
-            <p className="text-gray-500">Beheer al je leads en klanten</p>
+            <h1 className="text-2xl font-semibold" style={{ color: colors.dark }}>Leads</h1>
+            <p style={{ color: colors.slate }}>Beheer al je leads en klanten</p>
           </div>
         </div>
 
         {/* Search & Filter */}
-        <Card>
+        <Card className="border-0" style={{ backgroundColor: colors.warmWhite, boxShadow: '0 2px 8px rgba(26, 31, 46, 0.06)' }}>
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row gap-4">
               <Input
@@ -140,6 +198,7 @@ export default function LeadsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="md:w-80"
+                style={{ borderColor: colors.mist, backgroundColor: 'white' }}
               />
               <div className="flex gap-2 flex-wrap">
                 {[
@@ -155,7 +214,10 @@ export default function LeadsPage() {
                     variant={filter === value ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setFilter(value)}
-                    className={filter === value ? 'bg-slate-800' : ''}
+                    style={filter === value
+                      ? { backgroundColor: colors.dark, color: 'white' }
+                      : { borderColor: colors.mist, color: colors.dark, backgroundColor: 'white' }
+                    }
                   >
                     {label} ({statusCounts[value as keyof typeof statusCounts] || 0})
                   </Button>
@@ -166,62 +228,98 @@ export default function LeadsPage() {
         </Card>
 
         {/* Leads List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
+        <Card className="border-0" style={{ backgroundColor: colors.warmWhite, boxShadow: '0 2px 8px rgba(26, 31, 46, 0.06)' }}>
+          <CardHeader style={{ borderBottom: `1px solid ${colors.mist}` }}>
+            <CardTitle style={{ color: colors.dark }}>
               {filter === 'all' ? 'Alle leads' : getStatusLabel(filter)} ({filteredLeads.length})
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {filteredLeads.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">Geen leads gevonden</p>
+              <p className="text-center py-8" style={{ color: colors.slate }}>Geen leads gevonden</p>
             ) : (
-              <div className="space-y-3">
-                {filteredLeads.map((lead) => (
-                  <Link
-                    key={lead.id}
-                    href={`/admin/leads/${lead.id}`}
-                    className="block border rounded-lg p-4 hover:bg-gray-50 transition-colors hover:border-orange-300"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-semibold text-lg">{lead.name}</h3>
-                        <p className="text-sm text-gray-500">{lead.city}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(lead.status)}`}>
-                        {getStatusLabel(lead.status)}
-                      </span>
-                    </div>
-
-                    {lead.description && (
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{lead.description}</p>
-                    )}
-
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                      {lead.phone && (
-                        <span>Tel: {lead.phone}</span>
-                      )}
-                      {lead.email && (
-                        <span>{lead.email}</span>
-                      )}
-                      {lead.estimated_m2 && (
-                        <span>{lead.estimated_m2} m²</span>
-                      )}
-                      <span>Via: {lead.source}</span>
-                      <span>{formatDate(lead.created_at)}</span>
-                    </div>
-
-                    {lead.project_type && lead.project_type.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {lead.project_type.map((type, i) => (
-                          <span key={i} className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs">
-                            {type}
+              <div className="divide-y" style={{ borderColor: colors.mist }}>
+                {filteredLeads.map((lead) => {
+                  const statusStyle = getStatusStyle(lead.status);
+                  return (
+                    <div
+                      key={lead.id}
+                      className="p-4 transition-colors"
+                      style={{ backgroundColor: 'transparent' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <Link href={`/admin/leads/${lead.id}`} className="flex-1">
+                          <h3
+                            className="font-semibold text-lg transition-colors hover:opacity-70"
+                            style={{ color: colors.dark }}
+                          >
+                            {lead.name}
+                          </h3>
+                          <p className="text-sm" style={{ color: colors.slate }}>{lead.city}</p>
+                        </Link>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="px-3 py-1 rounded-full text-xs font-medium"
+                            style={{
+                              backgroundColor: statusStyle.bg,
+                              color: statusStyle.text,
+                              border: `1px solid ${statusStyle.border}`
+                            }}
+                          >
+                            {getStatusLabel(lead.status)}
                           </span>
-                        ))}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="hover:bg-red-50"
+                            style={{ borderColor: colors.mist, color: '#b91c1c' }}
+                            onClick={(e) => deleteLead(e, lead.id, lead.name)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </Link>
-                ))}
+
+                      <Link href={`/admin/leads/${lead.id}`}>
+                        {lead.description && (
+                          <p className="text-sm mb-3 line-clamp-2" style={{ color: colors.slate }}>
+                            {lead.description}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-4 text-sm" style={{ color: colors.slate }}>
+                          {lead.phone && (
+                            <span>Tel: {lead.phone}</span>
+                          )}
+                          {lead.email && (
+                            <span>{lead.email}</span>
+                          )}
+                          {lead.estimated_m2 && (
+                            <span>{lead.estimated_m2} m²</span>
+                          )}
+                          <span>Via: {lead.source}</span>
+                          <span>{formatDate(lead.created_at)}</span>
+                        </div>
+
+                        {lead.project_type && lead.project_type.length > 0 && (
+                          <div className="flex gap-2 mt-3">
+                            {lead.project_type.map((type, i) => (
+                              <span
+                                key={i}
+                                className="px-2 py-0.5 rounded text-xs"
+                                style={{ backgroundColor: colors.mist, color: colors.dark }}
+                              >
+                                {type}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

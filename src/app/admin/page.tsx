@@ -6,7 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { Users, FileText, Calendar, Euro, ChevronRight } from 'lucide-react';
+import {
+  Users,
+  FileText,
+  Calendar,
+  Euro,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  Clock,
+  CheckCircle,
+  Leaf,
+  MoreHorizontal,
+  Plus
+} from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -26,27 +40,32 @@ interface Quote {
   lead_id: string;
 }
 
+interface Appointment {
+  id: string;
+  title: string;
+  date: string;
+  time_start: string;
+  lead_id: string;
+  leads?: { name: string; city: string };
+}
+
 interface DashboardStats {
   leads: {
     total: number;
     new: number;
-    contacted: number;
-    quote_sent: number;
     won: number;
-    lost: number;
+    thisMonth: number;
+    lastMonth: number;
   };
   quotes: {
     total: number;
-    draft: number;
     sent: number;
     accepted: number;
-    declined: number;
-    totalValue: number;
     acceptedValue: number;
-  };
-  conversion: {
-    leadToQuote: number;
-    quoteToWon: number;
+    pendingValue: number;
+    avgValue: number;
+    thisMonthValue: number;
+    lastMonthValue: number;
   };
 }
 
@@ -54,6 +73,7 @@ export default function AdminDashboard() {
   const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -64,20 +84,15 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [leadsRes, quotesRes] = await Promise.all([
+      const [leadsRes, quotesRes, appointmentsRes] = await Promise.all([
         fetch('/api/admin/leads'),
-        fetch('/api/admin/quotes')
+        fetch('/api/admin/quotes'),
+        fetch('/api/admin/appointments')
       ]);
 
-      if (leadsRes.ok) {
-        const data = await leadsRes.json();
-        setLeads(data.leads || []);
-      }
-
-      if (quotesRes.ok) {
-        const data = await quotesRes.json();
-        setQuotes(data.quotes || []);
-      }
+      if (leadsRes.ok) setLeads((await leadsRes.json()).leads || []);
+      if (quotesRes.ok) setQuotes((await quotesRes.json()).quotes || []);
+      if (appointmentsRes.ok) setAppointments((await appointmentsRes.json()).appointments || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -85,262 +100,253 @@ export default function AdminDashboard() {
     }
   };
 
-  // Calculate statistics
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  const isThisMonth = (dateString: string) => new Date(dateString) >= thisMonthStart;
+  const isLastMonth = (dateString: string) => {
+    const date = new Date(dateString);
+    return date >= lastMonthStart && date <= lastMonthEnd;
+  };
+
+  const pendingQuotes = quotes.filter(q => q.status === 'sent');
   const stats: DashboardStats = {
     leads: {
       total: leads.length,
       new: leads.filter(l => l.status === 'new').length,
-      contacted: leads.filter(l => l.status === 'contacted').length,
-      quote_sent: leads.filter(l => l.status === 'quote_sent').length,
       won: leads.filter(l => l.status === 'won').length,
-      lost: leads.filter(l => l.status === 'lost').length,
+      thisMonth: leads.filter(l => isThisMonth(l.created_at)).length,
+      lastMonth: leads.filter(l => isLastMonth(l.created_at)).length,
     },
     quotes: {
       total: quotes.length,
-      draft: quotes.filter(q => q.status === 'draft').length,
       sent: quotes.filter(q => q.status === 'sent').length,
       accepted: quotes.filter(q => q.status === 'accepted').length,
-      declined: quotes.filter(q => q.status === 'declined').length,
-      totalValue: quotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0),
       acceptedValue: quotes.filter(q => q.status === 'accepted').reduce((sum, q) => sum + (Number(q.total) || 0), 0),
-    },
-    conversion: {
-      leadToQuote: leads.length > 0 ? (quotes.length / leads.length) * 100 : 0,
-      quoteToWon: quotes.length > 0 ? (quotes.filter(q => q.status === 'accepted').length / quotes.length) * 100 : 0,
+      pendingValue: pendingQuotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0),
+      avgValue: quotes.length > 0 ? quotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0) / quotes.length : 0,
+      thisMonthValue: quotes.filter(q => isThisMonth(q.created_at) && q.status === 'accepted').reduce((sum, q) => sum + (Number(q.total) || 0), 0),
+      lastMonthValue: quotes.filter(q => isLastMonth(q.created_at) && q.status === 'accepted').reduce((sum, q) => sum + (Number(q.total) || 0), 0),
     }
   };
 
-  const recentLeads = [...leads]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 5);
+  const leadsTrend = stats.leads.lastMonth > 0
+    ? ((stats.leads.thisMonth - stats.leads.lastMonth) / stats.leads.lastMonth) * 100
+    : stats.leads.thisMonth > 0 ? 100 : 0;
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      new: 'bg-blue-100 text-blue-800',
-      contacted: 'bg-yellow-100 text-yellow-800',
-      site_visit_scheduled: 'bg-purple-100 text-purple-800',
-      quote_sent: 'bg-orange-100 text-orange-800',
-      won: 'bg-green-100 text-green-800',
-      lost: 'bg-red-100 text-red-800',
-      dormant: 'bg-gray-100 text-gray-800',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      new: 'Nieuw',
-      contacted: 'Gecontacteerd',
-      site_visit_scheduled: 'Afspraak gepland',
-      quote_sent: 'Offerte verstuurd',
-      negotiating: 'In onderhandeling',
-      won: 'Gewonnen',
-      lost: 'Verloren',
-      dormant: 'Slapend',
-    };
-    return labels[status] || status;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('nl-NL', {
-      day: 'numeric',
-      month: 'short',
-    });
-  };
+  const valueTrend = stats.quotes.lastMonthValue > 0
+    ? ((stats.quotes.thisMonthValue - stats.quotes.lastMonthValue) / stats.quotes.lastMonthValue) * 100
+    : stats.quotes.thisMonthValue > 0 ? 100 : 0;
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Laden...</p>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Page Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500">Overzicht van je bedrijf</p>
+      <div className="space-y-8">
+        {/* Welcome Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+            <p className="text-slate-500">Welkom terug, Niek. Hier zijn je cijfers van vandaag.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="bg-white">
+              <Calendar className="mr-2 h-4 w-4" />
+              {new Date().toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}
+            </Button>
+            <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+              <Plus className="mr-2 h-4 w-4" /> Nieuwe Lead
+            </Button>
+          </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-3xl font-bold text-blue-600">{stats.leads.new}</p>
-              <p className="text-sm text-blue-700">Nieuwe leads</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-yellow-50 border-yellow-200">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-3xl font-bold text-yellow-600">{stats.leads.contacted}</p>
-              <p className="text-sm text-yellow-700">Gecontacteerd</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-orange-50 border-orange-200">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-3xl font-bold text-orange-600">{stats.quotes.sent}</p>
-              <p className="text-sm text-orange-700">Offertes open</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-3xl font-bold text-green-600">{stats.leads.won}</p>
-              <p className="text-sm text-green-700">Gewonnen</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-purple-50 border-purple-200">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-3xl font-bold text-purple-600">{stats.conversion.leadToQuote.toFixed(0)}%</p>
-              <p className="text-sm text-purple-700">Lead → Offerte</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-emerald-50 border-emerald-200">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-3xl font-bold text-emerald-600">{stats.conversion.quoteToWon.toFixed(0)}%</p>
-              <p className="text-sm text-emerald-700">Offerte → Won</p>
-            </CardContent>
-          </Card>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title="Totale Omzet"
+            value={`€${stats.quotes.acceptedValue.toLocaleString('nl-NL')}`}
+            trend={valueTrend > 0 ? `+${valueTrend.toFixed(0)}%` : `${valueTrend.toFixed(0)}%`}
+            trendPositive={valueTrend >= 0}
+            icon={Euro}
+            color="bg-green-500"
+          />
+          <StatCard
+            title="Nieuwe Leads"
+            value={stats.leads.thisMonth.toString()}
+            trend={leadsTrend > 0 ? `+${leadsTrend.toFixed(0)}%` : `${leadsTrend.toFixed(0)}%`}
+            trendPositive={leadsTrend >= 0}
+            icon={Users}
+            color="bg-blue-500"
+          />
+          <StatCard
+            title="Openstaande Offertes"
+            value={stats.quotes.sent.toString()}
+            subValue={`€${stats.quotes.pendingValue.toLocaleString('nl-NL')}`}
+            icon={FileText}
+            color="bg-orange-500"
+          />
+          <StatCard
+            title="Conversie Ratio"
+            value={`${stats.leads.total > 0 ? ((stats.leads.won / stats.leads.total) * 100).toFixed(0) : 0}%`}
+            subValue="Leads naar Klant"
+            icon={TrendingUp}
+            color="bg-purple-500"
+          />
         </div>
 
-        {/* Revenue Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">Totale waarde offertes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">€{stats.quotes.totalValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">Geaccepteerde offertes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-green-600">€{stats.quotes.acceptedValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">Totaal leads</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{stats.leads.total}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Leads & Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Recent Leads */}
-          <Card>
+          <Card className="lg:col-span-2 border-slate-200 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Recente Leads</CardTitle>
-              <Link href="/admin/leads">
-                <Button variant="outline" size="sm">Alle leads</Button>
+              <CardTitle className="text-lg font-semibold text-slate-900">Recente Leads</CardTitle>
+              <Link href="/admin/leads" className="text-sm text-orange-600 hover:text-orange-700 font-medium hover:underline">
+                Bekijk alles
               </Link>
             </CardHeader>
             <CardContent>
-              {recentLeads.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Nog geen leads</p>
-              ) : (
-                <div className="space-y-3">
-                  {recentLeads.map((lead) => (
-                    <Link
-                      key={lead.id}
-                      href={`/admin/leads/${lead.id}`}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 transition-colors"
-                    >
-                      <div>
-                        <p className="font-medium">{lead.name}</p>
-                        <p className="text-sm text-gray-500">{lead.city} • {formatDate(lead.created_at)}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                        {getStatusLabel(lead.status)}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Snelle Acties</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Link href="/admin/leads" className="block">
-                <Button className="w-full justify-start bg-blue-500 hover:bg-blue-600">
-                  <Users className="w-4 h-4 mr-2" />
-                  Bekijk alle leads ({stats.leads.total})
-                </Button>
-              </Link>
-              <Link href="/admin/offertes" className="block">
-                <Button className="w-full justify-start bg-orange-500 hover:bg-orange-600">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Bekijk alle offertes ({stats.quotes.total})
-                </Button>
-              </Link>
-              <Link href="/admin/planning" className="block">
-                <Button className="w-full justify-start bg-purple-500 hover:bg-purple-600">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Planning bekijken
-                </Button>
-              </Link>
-              <Link href="/admin/prijzen" className="block">
-                <Button className="w-full justify-start bg-emerald-500 hover:bg-emerald-600">
-                  <Euro className="w-4 h-4 mr-2" />
-                  Prijzen beheren
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Pipeline Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Lead Pipeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {[
-                { status: 'new', label: 'Nieuw', color: 'bg-blue-500' },
-                { status: 'contacted', label: 'Gecontacteerd', color: 'bg-yellow-500' },
-                { status: 'site_visit_scheduled', label: 'Afspraak', color: 'bg-purple-500' },
-                { status: 'quote_sent', label: 'Offerte', color: 'bg-orange-500' },
-                { status: 'negotiating', label: 'Onderhandeling', color: 'bg-pink-500' },
-                { status: 'won', label: 'Gewonnen', color: 'bg-green-500' },
-                { status: 'lost', label: 'Verloren', color: 'bg-red-500' },
-              ].map((stage, index) => {
-                const count = leads.filter(l => l.status === stage.status).length;
-                return (
-                  <div key={stage.status} className="flex items-center">
-                    <div className="flex flex-col items-center min-w-[100px]">
-                      <div className={`w-12 h-12 rounded-full ${stage.color} flex items-center justify-center text-white font-bold text-lg`}>
-                        {count}
-                      </div>
-                      <span className="text-xs text-gray-600 mt-1 text-center">{stage.label}</span>
-                    </div>
-                    {index < 6 && (
-                      <ChevronRight className="w-6 h-6 text-gray-300 mx-2" />
+              <div className="rounded-lg border border-slate-100 overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 text-slate-500 font-medium">
+                    <tr>
+                      <th className="p-4">Naam</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Datum</th>
+                      <th className="p-4 text-right">Actie</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {leads.slice(0, 5).map(lead => (
+                      <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-4">
+                          <div className="font-medium text-slate-900">{lead.name}</div>
+                          <div className="text-slate-500 text-xs">{lead.city}</div>
+                        </td>
+                        <td className="p-4">
+                          <StatusBadge status={lead.status} />
+                        </td>
+                        <td className="p-4 text-slate-500">{new Date(lead.created_at).toLocaleDateString()}</td>
+                        <td className="p-4 text-right">
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="w-4 h-4 text-slate-400" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {leads.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-slate-500">Geen recente leads</td>
+                      </tr>
                     )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Actions / Quick Links */}
+          <div className="space-y-6">
+            <Card className="border-slate-200 shadow-sm bg-slate-900 text-white">
+              <CardHeader>
+                <CardTitle className="text-lg">Snelle Acties</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button className="w-full justify-start bg-white/10 hover:bg-white/20 text-white border-0 h-12 font-normal">
+                  <Plus className="mr-2 h-4 w-4 text-orange-400" /> Nieuwe Offerte Maken
+                </Button>
+                <Button className="w-full justify-start bg-white/10 hover:bg-white/20 text-white border-0 h-12 font-normal">
+                  <Calendar className="mr-2 h-4 w-4 text-blue-400" /> Afspraak Inplannen
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Aankomende Agenda</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {appointments.length > 0 ? (
+                  <div className="space-y-4">
+                    {appointments.slice(0, 3).map(apt => (
+                      <div key={apt.id} className="flex gap-4 items-start">
+                        <div className="w-12 h-12 rounded-lg bg-orange-50 flex flex-col items-center justify-center text-orange-600 border border-orange-100 flex-shrink-0">
+                          <span className="text-xs font-bold uppercase">{new Date(apt.date).toLocaleDateString('nl', { weekday: 'short' })}</span>
+                          <span className="text-lg font-bold leading-none">{new Date(apt.date).getDate()}</span>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-slate-900 line-clamp-1">{apt.title}</h4>
+                          <p className="text-sm text-slate-500">{apt.time_start} uur</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                ) : (
+                  <p className="text-sm text-slate-500 text-center py-4">Geen afspraken deze week</p>
+                )}
+                <Button variant="link" className="w-full mt-2 text-slate-500">Bekijk volledige agenda</Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </AdminLayout>
+  );
+}
+
+function StatCard({ title, value, trend, trendPositive, icon: Icon, color, subValue }: any) {
+  return (
+    <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className={`p-2 rounded-lg ${color} bg-opacity-10`}>
+            <Icon className={`w-5 h-5 ${color.replace('bg-', 'text-')}`} />
+          </div>
+          {trend && (
+            <div className={`flex items-center text-xs font-medium px-2 py-1 rounded-full ${trendPositive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+              {trendPositive ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+              {trend}
+            </div>
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+          {subValue && <p className="text-xs text-slate-400 mt-1">{subValue}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    new: 'bg-blue-50 text-blue-700 border-blue-100',
+    contacted: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    quote_sent: 'bg-orange-50 text-orange-700 border-orange-100',
+    won: 'bg-green-50 text-green-700 border-green-100',
+    lost: 'bg-red-50 text-red-700 border-red-100'
+  };
+
+  const labels: Record<string, string> = {
+    new: 'Nieuw',
+    contacted: 'Contact',
+    quote_sent: 'Offerte',
+    won: 'Gewonnen',
+    lost: 'Verloren'
+  };
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
+      {labels[status] || status}
+    </span>
   );
 }

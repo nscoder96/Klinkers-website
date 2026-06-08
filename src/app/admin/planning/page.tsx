@@ -7,6 +7,22 @@ import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { MapPin, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
+// Klinkers & Co Design System - Orange/Blue
+const colors = {
+  orange: '#FA5D29',
+  orangeLight: '#FFF4F1',
+  blue: '#49B3FC',
+  blueLight: '#F0F9FF',
+  dark: '#222222',
+  darkLight: '#2d2d2d',
+  slate: '#64748b',
+  stone: '#F8F8F8',
+  warmWhite: '#ffffff',
+  mist: '#ededed',
+  success: '#22c55e',
+  successLight: '#f0fdf4',
+};
+
 interface Appointment {
   id: string;
   lead_id: string;
@@ -78,14 +94,14 @@ export default function PlanningPage() {
   };
 
   const getAppointmentColor = (type: string) => {
-    const colors: Record<string, string> = {
-      site_visit: 'bg-purple-100 border-purple-300 text-purple-800',
-      follow_up_call: 'bg-blue-100 border-blue-300 text-blue-800',
-      project_start: 'bg-green-100 border-green-300 text-green-800',
-      project_end: 'bg-orange-100 border-orange-300 text-orange-800',
-      other: 'bg-gray-100 border-gray-300 text-gray-800',
+    const colorMap: Record<string, { bg: string; border: string; text: string }> = {
+      site_visit: { bg: colors.blueLight, border: colors.blue, text: colors.dark },
+      follow_up_call: { bg: colors.blueLight, border: colors.blue, text: colors.dark },
+      project_start: { bg: colors.successLight, border: colors.success, text: colors.dark },
+      project_end: { bg: colors.orangeLight, border: colors.orange, text: colors.dark },
+      other: { bg: colors.stone, border: colors.mist, text: colors.slate },
     };
-    return colors[type] || colors.other;
+    return colorMap[type] || colorMap.other;
   };
 
   const getAppointmentLabel = (type: string) => {
@@ -101,8 +117,8 @@ export default function PlanningPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Laden...</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: colors.stone }}>
+        <p style={{ color: colors.slate }}>Laden...</p>
       </div>
     );
   }
@@ -117,10 +133,10 @@ export default function PlanningPage() {
         {/* Page Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Planning</h1>
-            <p className="text-gray-500">Beheer je afspraken en planning</p>
+            <h1 className="text-2xl font-bold" style={{ color: colors.dark }}>Planning</h1>
+            <p style={{ color: colors.slate }}>Beheer je afspraken en planning</p>
           </div>
-          <Button className="bg-green-600 hover:bg-green-700">
+          <Button style={{ backgroundColor: colors.orange, color: colors.warmWhite }} className="hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> Nieuwe afspraak
           </Button>
         </div>
@@ -136,12 +152,12 @@ export default function PlanningPage() {
                 <ChevronLeft className="w-4 h-4 mr-1" /> Vorige week
               </Button>
               <div className="text-center">
-                <p className="font-semibold">
+                <p className="font-semibold" style={{ color: colors.dark }}>
                   {weekDates[0].toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}
                   {' - '}
                   {weekDates[6].toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
-                {selectedWeek === 0 && <span className="text-sm text-orange-500">Deze week</span>}
+                {selectedWeek === 0 && <span className="text-sm" style={{ color: colors.orange }}>Deze week</span>}
               </div>
               <Button
                 variant="outline"
@@ -161,33 +177,38 @@ export default function PlanningPage() {
                 const dayAppointments = getAppointmentsForDate(date);
                 const isToday = date.toDateString() === new Date().toDateString();
                 const isPast = date < new Date() && !isToday;
+                const colorObj = isToday ? { borderColor: colors.orange, backgroundColor: colors.orangeLight } : isPast ? { backgroundColor: colors.stone } : {};
 
                 return (
-                  <div key={index} className={`min-h-[200px] border rounded-lg p-2 ${isToday ? 'border-orange-500 bg-orange-50' : isPast ? 'bg-gray-50' : ''}`}>
-                    <div className={`text-center mb-2 pb-2 border-b ${isToday ? 'border-orange-300' : ''}`}>
-                      <p className="text-sm font-medium text-gray-500">{weekDays[index]}</p>
-                      <p className={`text-lg font-bold ${isToday ? 'text-orange-600' : ''}`}>
+                  <div key={index} className="min-h-[200px] border rounded-lg p-2" style={{ ...colorObj, borderColor: colorObj.borderColor || '#e5e7eb' }}>
+                    <div className="text-center mb-2 pb-2" style={{ borderBottomColor: isToday ? colors.orange : '#f0f0f0', borderBottomWidth: 1 }}>
+                      <p className="text-sm font-medium" style={{ color: colors.slate }}>{weekDays[index]}</p>
+                      <p className="text-lg font-bold" style={{ color: isToday ? colors.orange : colors.dark }}>
                         {date.getDate()}
                       </p>
                     </div>
                     <div className="space-y-1">
                       {dayAppointments.length === 0 ? (
-                        <p className="text-xs text-gray-400 text-center py-4">Geen afspraken</p>
+                        <p className="text-xs text-center py-4" style={{ color: colors.mist }}>Geen afspraken</p>
                       ) : (
-                        dayAppointments.map((apt) => (
-                          <div
-                            key={apt.id}
-                            className={`p-2 rounded border text-xs ${getAppointmentColor(apt.appointment_type)}`}
-                          >
-                            <p className="font-medium">{formatTime(apt.scheduled_at)}</p>
-                            <p className="truncate">{apt.title}</p>
-                            {apt.location && (
-                              <p className="text-gray-600 truncate flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> {apt.location}
-                              </p>
-                            )}
-                          </div>
-                        ))
+                        dayAppointments.map((apt) => {
+                          const aptColors = getAppointmentColor(apt.appointment_type);
+                          return (
+                            <div
+                              key={apt.id}
+                              className="p-2 rounded border text-xs"
+                              style={{ backgroundColor: aptColors.bg, borderColor: aptColors.border, color: aptColors.text }}
+                            >
+                              <p className="font-medium">{formatTime(apt.scheduled_at)}</p>
+                              <p className="truncate">{apt.title}</p>
+                              {apt.location && (
+                                <p className="truncate flex items-center gap-1" style={{ color: colors.slate }}>
+                                  <MapPin className="w-3 h-3" /> {apt.location}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -200,13 +221,13 @@ export default function PlanningPage() {
         {/* Upcoming Appointments */}
         <Card>
           <CardHeader>
-            <CardTitle>Komende afspraken</CardTitle>
+            <CardTitle style={{ color: colors.dark }}>Komende afspraken</CardTitle>
           </CardHeader>
           <CardContent>
             {appointments.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 mb-4">Nog geen afspraken gepland</p>
-                <p className="text-sm text-gray-400">
+                <p className="mb-4" style={{ color: colors.slate }}>Nog geen afspraken gepland</p>
+                <p className="text-sm" style={{ color: colors.mist }}>
                   Tip: Plan een locatiebezoek vanuit een lead pagina
                 </p>
               </div>
@@ -216,34 +237,37 @@ export default function PlanningPage() {
                   .filter(apt => new Date(apt.scheduled_at) >= new Date())
                   .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
                   .slice(0, 10)
-                  .map((apt) => (
-                    <div key={apt.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                      <div className="flex items-center gap-4">
-                        <div className="text-center min-w-[60px]">
-                          <p className="text-sm font-medium">
-                            {new Date(apt.scheduled_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-                          </p>
-                          <p className="text-lg font-bold">{formatTime(apt.scheduled_at)}</p>
-                        </div>
-                        <div>
-                          <p className="font-medium">{apt.title}</p>
-                          <div className="flex gap-2 text-sm text-gray-500">
-                            <span className={`px-2 py-0.5 rounded text-xs ${getAppointmentColor(apt.appointment_type)}`}>
-                              {getAppointmentLabel(apt.appointment_type)}
-                            </span>
-                            {apt.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> {apt.location}
+                  .map((apt) => {
+                    const aptColors = getAppointmentColor(apt.appointment_type);
+                    return (
+                      <div key={apt.id} className="flex items-center justify-between p-3 border rounded-lg" style={{ backgroundColor: colors.warmWhite, borderColor: colors.mist }}>
+                        <div className="flex items-center gap-4">
+                          <div className="text-center min-w-[60px]">
+                            <p className="text-sm font-medium" style={{ color: colors.slate }}>
+                              {new Date(apt.scheduled_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                            </p>
+                            <p className="text-lg font-bold" style={{ color: colors.dark }}>{formatTime(apt.scheduled_at)}</p>
+                          </div>
+                          <div>
+                            <p className="font-medium" style={{ color: colors.dark }}>{apt.title}</p>
+                            <div className="flex gap-2 text-sm">
+                              <span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: aptColors.bg, color: aptColors.text, borderColor: aptColors.border, border: '1px solid' }}>
+                                {getAppointmentLabel(apt.appointment_type)}
                               </span>
-                            )}
+                              {apt.location && (
+                                <span className="flex items-center gap-1" style={{ color: colors.slate }}>
+                                  <MapPin className="w-3 h-3" /> {apt.location}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <Button variant="outline" size="sm">
+                          Bekijken
+                        </Button>
                       </div>
-                      <Button variant="outline" size="sm">
-                        Bekijken
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </CardContent>

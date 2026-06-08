@@ -8,6 +8,22 @@ import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Shovel, Grid3X3, Leaf, Fence, Scissors, Package, Plus, Sparkles } from 'lucide-react';
 
+// Klinkers & Co Design System - Orange/Blue
+const colors = {
+  orange: '#FA5D29',
+  orangeLight: '#FFF4F1',
+  blue: '#49B3FC',
+  blueLight: '#F0F9FF',
+  dark: '#222222',
+  darkLight: '#2d2d2d',
+  slate: '#64748b',
+  stone: '#F8F8F8',
+  warmWhite: '#ffffff',
+  mist: '#ededed',
+  success: '#22c55e',
+  successLight: '#f0fdf4',
+};
+
 interface PricingItem {
   id: string;
   category: string;
@@ -180,8 +196,8 @@ export default function PrijzenPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Laden...</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: colors.stone }}>
+        <p style={{ color: colors.slate }}>Laden...</p>
       </div>
     );
   }
@@ -196,12 +212,13 @@ export default function PrijzenPage() {
         {/* Page Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Prijzen Beheren</h1>
-            <p className="text-gray-500">Beheer je prijslijst voor offertes</p>
+            <h1 className="text-2xl font-bold" style={{ color: colors.dark }}>Prijzen Beheren</h1>
+            <p style={{ color: colors.slate }}>Beheer je prijslijst voor offertes</p>
           </div>
           <Button
             onClick={() => setShowAddForm(true)}
-            className="bg-green-600 hover:bg-green-700"
+            style={{ backgroundColor: colors.orange }}
+            className="hover:opacity-90 text-white"
           >
             <Plus className="w-4 h-4 mr-2" /> Nieuw item
           </Button>
@@ -239,9 +256,9 @@ export default function PrijzenPage() {
 
         {/* Add New Item Form */}
         {showAddForm && (
-          <Card className="border-2 border-green-200 bg-green-50">
+          <Card style={{ borderColor: colors.orange, borderWidth: '2px', backgroundColor: colors.orangeLight }}>
             <CardHeader>
-              <CardTitle>Nieuw prijsitem toevoegen</CardTitle>
+              <CardTitle style={{ color: colors.dark }}>Nieuw prijsitem toevoegen</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -332,7 +349,8 @@ export default function PrijzenPage() {
                 <Button
                   onClick={addItem}
                   disabled={saving}
-                  className="bg-green-600 hover:bg-green-700"
+                  style={{ backgroundColor: colors.orange }}
+                  className="hover:opacity-90 text-white"
                 >
                   {saving ? 'Opslaan...' : 'Item toevoegen'}
                 </Button>
@@ -364,7 +382,7 @@ export default function PrijzenPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="text-left text-sm text-gray-500 border-b">
+                      <tr className="text-left text-sm border-b" style={{ color: colors.slate, borderColor: colors.mist }}>
                         <th className="pb-2 font-medium">Naam</th>
                         <th className="pb-2 font-medium">Eenheid</th>
                         <th className="pb-2 font-medium text-right">Prijs</th>
@@ -377,7 +395,7 @@ export default function PrijzenPage() {
                     </thead>
                     <tbody>
                       {items.map((item) => (
-                        <tr key={item.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                        <tr key={item.id} className="border-b last:border-b-0" style={{ borderColor: colors.mist, backgroundColor: 'transparent' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                           <td className="py-3">
                             {editingId === item.id ? (
                               <Input
@@ -388,21 +406,21 @@ export default function PrijzenPage() {
                             ) : (
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <p className="font-medium">{item.item_name}</p>
+                                  <p className="font-medium" style={{ color: colors.dark }}>{item.item_name}</p>
                                   {item.ai_generated && (
-                                    <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
+                                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: colors.blueLight, color: colors.blue }}>
                                       <Sparkles className="w-3 h-3" /> AI
                                     </span>
                                   )}
                                 </div>
                                 {item.item_description && (
-                                  <p className="text-xs text-gray-500">{item.item_description}</p>
+                                  <p className="text-xs" style={{ color: colors.slate }}>{item.item_description}</p>
                                 )}
                               </div>
                             )}
                           </td>
                           <td className="py-3">{item.unit}</td>
-                          <td className="py-3 text-right font-medium">
+                          <td className="py-3 text-right font-medium" style={{ color: colors.dark }}>
                             {editingId === item.id ? (
                               <Input
                                 type="number"
@@ -415,19 +433,24 @@ export default function PrijzenPage() {
                               `€${Number(item.selling_price_default).toFixed(2)}`
                             )}
                           </td>
-                          <td className="py-3 text-right text-gray-500">
+                          <td className="py-3 text-right" style={{ color: colors.slate }}>
                             {item.selling_price_min ? `€${Number(item.selling_price_min).toFixed(2)}` : '-'}
                           </td>
-                          <td className="py-3 text-right text-gray-500">
+                          <td className="py-3 text-right" style={{ color: colors.slate }}>
                             {item.selling_price_max ? `€${Number(item.selling_price_max).toFixed(2)}` : '-'}
                           </td>
-                          <td className="py-3 text-right text-gray-500">
+                          <td className="py-3 text-right" style={{ color: colors.slate }}>
                             {item.cost_price ? `€${Number(item.cost_price).toFixed(2)}` : '-'}
                           </td>
                           <td className="py-3 text-center">
                             <button
                               onClick={() => updateItem(item.id, { is_active: !item.is_active })}
-                              className={`w-6 h-6 rounded-full ${item.is_active ? 'bg-green-500' : 'bg-gray-300'}`}
+                              style={{
+                                backgroundColor: item.is_active ? colors.success : colors.mist,
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%'
+                              }}
                             >
                               {item.is_active && <span className="text-white text-xs">✓</span>}
                             </button>
@@ -438,13 +461,14 @@ export default function PrijzenPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                                style={{ color: colors.dark, borderColor: colors.mist }}
                               >
                                 {editingId === item.id ? 'Klaar' : 'Bewerk'}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-red-600 hover:bg-red-50"
+                                style={{ color: colors.orange, borderColor: colors.mist }}
                                 onClick={() => deleteItem(item.id)}
                               >
                                 ×
@@ -463,7 +487,7 @@ export default function PrijzenPage() {
 
         {filteredPricing.length === 0 && (
           <Card>
-            <CardContent className="py-12 text-center text-gray-500">
+            <CardContent className="py-12 text-center" style={{ color: colors.slate }}>
               Geen prijsitems gevonden in deze categorie
             </CardContent>
           </Card>

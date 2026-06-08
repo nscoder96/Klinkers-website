@@ -8,6 +8,22 @@ import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Calendar, Flag } from 'lucide-react';
 
+// Klinkers & Co Design System - Orange/Blue
+const colors = {
+  orange: '#FA5D29',
+  orangeLight: '#FFF4F1',
+  blue: '#49B3FC',
+  blueLight: '#F0F9FF',
+  dark: '#222222',
+  darkLight: '#2d2d2d',
+  slate: '#64748b',
+  stone: '#F8F8F8',
+  warmWhite: '#ffffff',
+  mist: '#ededed',
+  success: '#22c55e',
+  successLight: '#f0fdf4',
+};
+
 interface Project {
   id: string;
   project_number: string;
@@ -56,14 +72,14 @@ export default function ProjectenPage() {
     : projects.filter(p => p.status === filter);
 
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      scheduled: 'bg-blue-100 text-blue-800 border-blue-200',
-      in_progress: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      completed: 'bg-green-100 text-green-800 border-green-200',
-      invoiced: 'bg-purple-100 text-purple-800 border-purple-200',
-      paid: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    const statusColors: Record<string, { bg: string; text: string; border: string }> = {
+      scheduled: { bg: colors.blueLight, text: colors.blue, border: colors.blue },
+      in_progress: { bg: colors.orangeLight, text: colors.orange, border: colors.orange },
+      completed: { bg: colors.successLight, text: colors.success, border: colors.success },
+      invoiced: { bg: colors.stone, text: colors.dark, border: colors.mist },
+      paid: { bg: colors.blueLight, text: colors.blue, border: colors.blue },
     };
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return statusColors[status] || { bg: colors.stone, text: colors.dark, border: colors.mist };
   };
 
   const getStatusLabel = (status: string) => {
@@ -102,8 +118,8 @@ export default function ProjectenPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Laden...</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: colors.stone }}>
+        <p style={{ color: colors.slate }}>Laden...</p>
       </div>
     );
   }
@@ -117,8 +133,8 @@ export default function ProjectenPage() {
       <div className="space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Projecten</h1>
-          <p className="text-gray-500">Beheer je lopende en afgeronde projecten</p>
+          <h1 className="text-2xl font-bold" style={{ color: colors.dark }}>Projecten</h1>
+          <p style={{ color: colors.slate }}>Beheer je lopende en afgeronde projecten</p>
         </div>
 
         {/* Stats */}
@@ -126,25 +142,25 @@ export default function ProjectenPage() {
           <Card>
             <CardContent className="pt-4 pb-4">
               <p className="text-2xl font-bold">{projects.length}</p>
-              <p className="text-sm text-gray-500">Totaal projecten</p>
+              <p className="text-sm" style={{ color: colors.slate }}>Totaal projecten</p>
             </CardContent>
           </Card>
-          <Card className="bg-yellow-50 border-yellow-200">
+          <Card style={{ backgroundColor: colors.orangeLight, borderColor: colors.orange, borderWidth: '1px' }}>
             <CardContent className="pt-4 pb-4">
-              <p className="text-2xl font-bold text-yellow-600">{statusCounts.in_progress}</p>
-              <p className="text-sm text-yellow-700">In uitvoering</p>
+              <p className="text-2xl font-bold" style={{ color: colors.orange }}>{statusCounts.in_progress}</p>
+              <p className="text-sm" style={{ color: colors.orange }}>In uitvoering</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
               <p className="text-2xl font-bold">€{totalValue.toLocaleString('nl-NL')}</p>
-              <p className="text-sm text-gray-500">Totale waarde</p>
+              <p className="text-sm" style={{ color: colors.slate }}>Totale waarde</p>
             </CardContent>
           </Card>
-          <Card className="bg-green-50 border-green-200">
+          <Card style={{ backgroundColor: colors.successLight, borderColor: colors.success, borderWidth: '1px' }}>
             <CardContent className="pt-4 pb-4">
-              <p className="text-2xl font-bold text-green-600">€{completedValue.toLocaleString('nl-NL')}</p>
-              <p className="text-sm text-green-700">Afgerond</p>
+              <p className="text-2xl font-bold" style={{ color: colors.success }}>€{completedValue.toLocaleString('nl-NL')}</p>
+              <p className="text-sm" style={{ color: colors.success }}>Afgerond</p>
             </CardContent>
           </Card>
         </div>
@@ -166,7 +182,11 @@ export default function ProjectenPage() {
                   variant={filter === value ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setFilter(value)}
-                  className={filter === value ? 'bg-slate-800' : ''}
+                  style={filter === value ? {
+                    backgroundColor: colors.orange,
+                    color: colors.warmWhite,
+                    borderColor: colors.orange
+                  } : {}}
                 >
                   {label} ({statusCounts[value as keyof typeof statusCounts] || 0})
                 </Button>
@@ -185,8 +205,8 @@ export default function ProjectenPage() {
           <CardContent>
             {filteredProjects.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-500 mb-4">Nog geen projecten</p>
-                <p className="text-sm text-gray-400">
+                <p className="mb-4" style={{ color: colors.slate }}>Nog geen projecten</p>
+                <p className="text-sm" style={{ color: colors.slate }}>
                   Projecten worden automatisch aangemaakt wanneer een offerte wordt geaccepteerd
                 </p>
               </div>
@@ -198,38 +218,53 @@ export default function ProjectenPage() {
                     const dateB = b.planned_start_date || '9999';
                     return dateA.localeCompare(dateB);
                   })
-                  .map((project) => (
+                  .map((project) => {
+                    const statusColor = getStatusColor(project.status);
+                    return (
                     <div
                       key={project.id}
-                      className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      className="border rounded-lg p-4 transition-colors"
+                      style={{
+                        borderColor: colors.mist,
+                        backgroundColor: colors.warmWhite,
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.stone}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.warmWhite}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <div className="flex items-center gap-3">
-                            <h3 className="font-semibold text-lg">{project.project_number}</h3>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(project.status)}`}>
+                            <h3 className="font-semibold text-lg" style={{ color: colors.dark }}>{project.project_number}</h3>
+                            <span
+                              className="px-2 py-1 rounded-full text-xs font-medium border"
+                              style={{
+                                backgroundColor: statusColor.bg,
+                                color: statusColor.text,
+                                borderColor: statusColor.border,
+                              }}
+                            >
                               {getStatusLabel(project.status)}
                             </span>
                           </div>
                           {project.lead_name && (
-                            <Link href={`/admin/leads/${project.lead_id}`} className="text-sm text-blue-600 hover:underline">
+                            <Link href={`/admin/leads/${project.lead_id}`} className="text-sm hover:underline" style={{ color: colors.blue }}>
                               {project.lead_name} - {project.lead_city}
                             </Link>
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-bold text-orange-600">
+                          <p className="text-xl font-bold" style={{ color: colors.orange }}>
                             €{Number(project.final_amount || project.quoted_amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
                           </p>
                           {project.additional_work > 0 && (
-                            <p className="text-sm text-green-600">
+                            <p className="text-sm" style={{ color: colors.success }}>
                               +€{Number(project.additional_work).toLocaleString('nl-NL')} meerwerk
                             </p>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex gap-4 text-sm text-gray-500">
+                      <div className="flex gap-4 text-sm" style={{ color: colors.slate }}>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" /> Start: {formatDate(project.planned_start_date || project.actual_start_date)}
                         </span>
@@ -245,23 +280,45 @@ export default function ProjectenPage() {
                           Bekijken
                         </Button>
                         {project.status === 'scheduled' && (
-                          <Button size="sm" className="bg-yellow-500 hover:bg-yellow-600">
+                          <Button
+                            size="sm"
+                            style={{
+                              backgroundColor: colors.blue,
+                              color: colors.warmWhite,
+                              border: 'none'
+                            }}
+                          >
                             Start project
                           </Button>
                         )}
                         {project.status === 'in_progress' && (
-                          <Button size="sm" className="bg-green-500 hover:bg-green-600">
+                          <Button
+                            size="sm"
+                            style={{
+                              backgroundColor: colors.orange,
+                              color: colors.warmWhite,
+                              border: 'none'
+                            }}
+                          >
                             Afronden
                           </Button>
                         )}
                         {project.status === 'completed' && (
-                          <Button size="sm" className="bg-purple-500 hover:bg-purple-600">
+                          <Button
+                            size="sm"
+                            style={{
+                              backgroundColor: colors.success,
+                              color: colors.warmWhite,
+                              border: 'none'
+                            }}
+                          >
                             Factureren
                           </Button>
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </CardContent>

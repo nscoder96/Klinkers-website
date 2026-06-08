@@ -24,8 +24,29 @@ import {
   MapPin,
   Sparkles,
   ArrowLeft,
+  UserCheck,
+  ExternalLink,
+  Pencil,
+  X,
+  Save,
   type LucideIcon
 } from 'lucide-react';
+
+// Klinkers & Co Design System - Orange/Blue
+const colors = {
+  orange: '#FA5D29',
+  orangeLight: '#FFF4F1',
+  blue: '#49B3FC',
+  blueLight: '#F0F9FF',
+  dark: '#222222',
+  darkLight: '#2d2d2d',
+  slate: '#64748b',
+  stone: '#F8F8F8',
+  warmWhite: '#ffffff',
+  mist: '#ededed',
+  success: '#22c55e',
+  successLight: '#f0fdf4',
+};
 
 interface Lead {
   id: string;
@@ -83,6 +104,22 @@ export default function LeadDetailPage() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [lostReason, setLostReason] = useState('');
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertedCustomerId, setConvertedCustomerId] = useState<string | null>(null);
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editPostcode, setEditPostcode] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editEstimatedM2, setEditEstimatedM2] = useState('');
+  const [editBudgetRange, setEditBudgetRange] = useState('');
+  const [editUrgency, setEditUrgency] = useState('');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -169,18 +206,107 @@ export default function LeadDetailPage() {
     }
   };
 
+  const startEditing = () => {
+    if (lead) {
+      setEditName(lead.name || '');
+      setEditPhone(lead.phone || '');
+      setEditEmail(lead.email || '');
+      setEditAddress(lead.address || '');
+      setEditPostcode(lead.postcode || '');
+      setEditCity(lead.city || '');
+      setEditDescription(lead.description || '');
+      setEditEstimatedM2(lead.estimated_m2?.toString() || '');
+      setEditBudgetRange(lead.budget_range || '');
+      setEditUrgency(lead.urgency || '');
+      setIsEditing(true);
+    }
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+  };
+
+  const saveLeadChanges = async () => {
+    if (!editName.trim()) {
+      alert('Naam is verplicht');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim(),
+          phone: editPhone || null,
+          email: editEmail || null,
+          address: editAddress || null,
+          postcode: editPostcode || null,
+          city: editCity || 'Onbekend',
+          description: editDescription || null,
+          estimated_m2: editEstimatedM2 ? parseFloat(editEstimatedM2) : null,
+          budget_range: editBudgetRange || null,
+          urgency: editUrgency || null
+        })
+      });
+
+      if (response.ok) {
+        await fetchData();
+        setIsEditing(false);
+      } else {
+        alert('Er ging iets mis bij het opslaan');
+      }
+    } catch (error) {
+      console.error('Error saving lead:', error);
+      alert('Er ging iets mis');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const convertToCustomer = async () => {
+    setConverting(true);
+    try {
+      const response = await fetch(`/api/admin/leads/${leadId}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setConvertedCustomerId(data.customer.id);
+        await fetchData(); // Refresh lead data to show updated status
+      } else {
+        if (data.customer_id) {
+          // Lead already converted
+          setConvertedCustomerId(data.customer_id);
+        } else {
+          alert(data.error || 'Kon lead niet converteren');
+        }
+      }
+    } catch (error) {
+      console.error('Error converting lead:', error);
+      alert('Er ging iets mis');
+    } finally {
+      setConverting(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      new: 'bg-blue-500',
-      contacted: 'bg-yellow-500',
-      site_visit_scheduled: 'bg-purple-500',
-      quote_sent: 'bg-orange-500',
-      negotiating: 'bg-pink-500',
-      won: 'bg-green-500',
-      lost: 'bg-red-500',
-      dormant: 'bg-gray-500',
+    const statusColors: Record<string, string> = {
+      new: `bg-[${colors.orangeLight}] text-[${colors.orange}]`,
+      contacted: `bg-[${colors.blueLight}] text-[${colors.blue}]`,
+      site_visit_scheduled: `bg-[${colors.blueLight}] text-[${colors.blue}]`,
+      quote_sent: `bg-[${colors.orangeLight}] text-[${colors.orange}]`,
+      negotiating: `bg-[${colors.blueLight}] text-[${colors.blue}]`,
+      won: `bg-[${colors.successLight}] text-[${colors.success}]`,
+      lost: 'bg-[rgba(239,68,68,0.1)] text-[#ef4444]',
+      dormant: `bg-[${colors.mist}] text-[${colors.slate}]`,
     };
-    return colors[status] || 'bg-gray-500';
+    return statusColors[status] || `bg-[${colors.mist}] text-[${colors.slate}]`;
   };
 
   const getStatusLabel = (status: string) => {
@@ -273,18 +399,46 @@ export default function LeadDetailPage() {
             <p className="text-gray-500">{lead.city}</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className={`px-4 py-2 rounded-full text-white font-medium ${getStatusColor(lead.status)}`}>
+            <span className={`px-4 py-2 rounded-full font-medium ${getStatusColor(lead.status)}`}>
               {getStatusLabel(lead.status)}
             </span>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSelectedStatus(lead.status);
-                setShowStatusModal(true);
-              }}
-            >
-              Status wijzigen
-            </Button>
+            {isEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                >
+                  <X className="w-4 h-4 mr-2" /> Annuleren
+                </Button>
+                <Button
+                  onClick={saveLeadChanges}
+                  disabled={saving}
+                  style={{ backgroundColor: colors.success }}
+                  className="hover:opacity-90 text-white"
+                >
+                  <Save className="w-4 h-4 mr-2" /> {saving ? 'Opslaan...' : 'Opslaan'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={startEditing}
+                >
+                  <Pencil className="w-4 h-4 mr-2" /> Bewerken
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedStatus(lead.status);
+                    setShowStatusModal(true);
+                  }}
+                >
+                  Status wijzigen
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -292,67 +446,171 @@ export default function LeadDetailPage() {
           {/* Left Column - Info & Actions */}
           <div className="lg:col-span-2 space-y-6">
             {/* Contact Info */}
-            <Card>
+            <Card className={isEditing ? `border-2 border-[${colors.blue}]/30` : ''}>
               <CardHeader>
                 <CardTitle>Contactgegevens</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-500">Telefoon</label>
-                  <p className="font-medium">
-                    {lead.phone ? (
-                      <a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline">
-                        {lead.phone}
-                      </a>
-                    ) : '-'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-500">Email</label>
-                  <p className="font-medium">
-                    {lead.email ? (
-                      <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">
-                        {lead.email}
-                      </a>
-                    ) : '-'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-500">Adres</label>
-                  <p className="font-medium">{lead.address || '-'}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-500">Postcode</label>
-                  <p className="font-medium">{lead.postcode || '-'}</p>
-                </div>
+                {isEditing ? (
+                  <>
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium text-gray-700">Naam *</label>
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Volledige naam"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Telefoon</label>
+                      <Input
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        placeholder="06-12345678"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Email</label>
+                      <Input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="email@voorbeeld.nl"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Adres</label>
+                      <Input
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                        placeholder="Straat en huisnummer"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Postcode</label>
+                      <Input
+                        value={editPostcode}
+                        onChange={(e) => setEditPostcode(e.target.value)}
+                        placeholder="1234 AB"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Plaats</label>
+                      <Input
+                        value={editCity}
+                        onChange={(e) => setEditCity(e.target.value)}
+                        placeholder="Stad"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-sm text-gray-500">Telefoon</label>
+                      <p className="font-medium">
+                        {lead.phone ? (
+                          <a href={`tel:${lead.phone}`} className="hover:underline" style={{ color: colors.blue }}>
+                            {lead.phone}
+                          </a>
+                        ) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500">Email</label>
+                      <p className="font-medium">
+                        {lead.email ? (
+                          <a href={`mailto:${lead.email}`} className="hover:underline" style={{ color: colors.blue }}>
+                            {lead.email}
+                          </a>
+                        ) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500">Adres</label>
+                      <p className="font-medium">{lead.address || '-'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500">Postcode</label>
+                      <p className="font-medium">{lead.postcode || '-'}</p>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
             {/* Project Info */}
-            <Card>
+            <Card className={isEditing ? `border-2 border-[${colors.blue}]/30` : ''}>
               <CardHeader>
                 <CardTitle>Projectinformatie</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm text-gray-500">Beschrijving</label>
-                  <p className="font-medium whitespace-pre-wrap">{lead.description || '-'}</p>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-500">Geschat oppervlak</label>
-                    <p className="font-medium">{lead.estimated_m2 ? `${lead.estimated_m2} m²` : '-'}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-500">Budget</label>
-                    <p className="font-medium">{lead.budget_range || '-'}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-500">Urgentie</label>
-                    <p className="font-medium">{lead.urgency || '-'}</p>
-                  </div>
-                </div>
-                {lead.project_type && lead.project_type.length > 0 && (
+                {isEditing ? (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Beschrijving</label>
+                      <Textarea
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="Beschrijf het project..."
+                        rows={4}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Geschat oppervlak (m²)</label>
+                        <Input
+                          type="number"
+                          value={editEstimatedM2}
+                          onChange={(e) => setEditEstimatedM2(e.target.value)}
+                          placeholder="bijv. 50"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Budget</label>
+                        <Input
+                          value={editBudgetRange}
+                          onChange={(e) => setEditBudgetRange(e.target.value)}
+                          placeholder="bijv. €5.000 - €10.000"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Urgentie</label>
+                        <select
+                          value={editUrgency}
+                          onChange={(e) => setEditUrgency(e.target.value)}
+                          className="w-full border rounded-md px-3 py-2 text-sm"
+                        >
+                          <option value="">Selecteer...</option>
+                          <option value="laag">Laag - Geen haast</option>
+                          <option value="normaal">Normaal</option>
+                          <option value="hoog">Hoog - Zo snel mogelijk</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-sm text-gray-500">Beschrijving</label>
+                      <p className="font-medium whitespace-pre-wrap">{lead.description || '-'}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-sm text-gray-500">Geschat oppervlak</label>
+                        <p className="font-medium">{lead.estimated_m2 ? `${lead.estimated_m2} m²` : '-'}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-500">Budget</label>
+                        <p className="font-medium">{lead.budget_range || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-500">Urgentie</label>
+                        <p className="font-medium">{lead.urgency || '-'}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {!isEditing && lead.project_type && lead.project_type.length > 0 && (
                   <div>
                     <label className="text-sm text-gray-500">Type project</label>
                     <div className="flex gap-2 mt-1">
@@ -374,10 +632,19 @@ export default function LeadDetailPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap gap-3">
                 <Link href={`/admin/offerte/${lead.id}`}>
-                  <Button className="bg-orange-500 hover:bg-orange-600">
+                  <Button style={{ backgroundColor: colors.orange }} className="hover:opacity-90 text-white">
                     <FileText className="w-4 h-4 mr-2" /> Offerte maken
                   </Button>
                 </Link>
+                {lead.status !== 'won' && lead.status !== 'lost' && (
+                  <Button
+                    onClick={() => setShowConvertModal(true)}
+                    style={{ backgroundColor: colors.blue }}
+                    className="hover:opacity-90 text-white"
+                  >
+                    <UserCheck className="w-4 h-4 mr-2" /> Converteer naar klant
+                  </Button>
+                )}
                 {lead.phone && (
                   <>
                     <a href={`tel:${lead.phone}`}>
@@ -396,6 +663,28 @@ export default function LeadDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Already Converted Notice */}
+            {lead.status === 'won' && (
+              <Card style={{ backgroundColor: colors.successLight, borderColor: colors.success }} className="border">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: colors.success }}>
+                      <UserCheck className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium" style={{ color: colors.dark }}>Lead is geconverteerd naar klant</p>
+                      <p className="text-sm" style={{ color: colors.success }}>Deze lead is succesvol omgezet naar een klant.</p>
+                    </div>
+                    <Link href="/admin/klanten">
+                      <Button variant="outline" size="sm" style={{ borderColor: colors.success, color: colors.success }} className="hover:opacity-80">
+                        Bekijk klanten <ExternalLink className="w-3 h-3 ml-1" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Add Note */}
             <Card>
               <CardHeader>
@@ -411,7 +700,8 @@ export default function LeadDetailPage() {
                 <Button
                   onClick={addNote}
                   disabled={saving || !newNote.trim()}
-                  className="mt-3 bg-slate-800 hover:bg-slate-700"
+                  style={{ backgroundColor: colors.dark }}
+                  className="mt-3 hover:opacity-90 text-white"
                 >
                   {saving ? 'Opslaan...' : 'Notitie opslaan'}
                 </Button>
@@ -437,7 +727,7 @@ export default function LeadDetailPage() {
                           <p className="text-sm text-gray-500">{formatDateTime(quote.created_at)}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-medium text-orange-600">€{Number(quote.total).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
+                          <p className="font-medium" style={{ color: colors.orange }}>€{Number(quote.total).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
                           <span className="text-xs text-gray-500">{quote.status}</span>
                         </div>
                       </Link>
@@ -458,8 +748,8 @@ export default function LeadDetailPage() {
                 <div className="space-y-4">
                   {/* Lead created */}
                   <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-green-600" />
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: colors.orangeLight }}>
+                      <Sparkles className="w-4 h-4" style={{ color: colors.orange }} />
                     </div>
                     <div>
                       <p className="font-medium">Lead aangemaakt</p>
@@ -473,8 +763,8 @@ export default function LeadDetailPage() {
                     const ActivityIcon = getActivityIcon(activity.activity_type);
                     return (
                       <div key={activity.id} className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                          <ActivityIcon className="w-4 h-4 text-slate-600" />
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: colors.blueLight }}>
+                          <ActivityIcon className="w-4 h-4" style={{ color: colors.blue }} />
                         </div>
                         <div>
                           <p className="font-medium">{activity.title}</p>
@@ -573,11 +863,101 @@ export default function LeadDetailPage() {
                   <Button
                     onClick={() => updateStatus(selectedStatus, lostReason)}
                     disabled={saving}
-                    className="flex-1 bg-slate-800 hover:bg-slate-700"
+                    style={{ backgroundColor: colors.dark }}
+                    className="flex-1 hover:opacity-90 text-white"
                   >
                     {saving ? 'Opslaan...' : 'Opslaan'}
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Convert to Customer Modal */}
+        {showConvertModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCheck className="w-5 h-5" style={{ color: colors.blue }} />
+                  Lead converteren naar klant
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {convertedCustomerId ? (
+                  // Success state
+                  <div className="text-center py-4">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: colors.successLight }}>
+                      <CheckCircle className="w-8 h-8" style={{ color: colors.success }} />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2" style={{ color: colors.success }}>
+                      Lead succesvol geconverteerd!
+                    </h3>
+                    <p className="text-gray-600 mb-6">
+                      De lead is omgezet naar een klant. Je kunt nu het klantprofiel bekijken.
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowConvertModal(false);
+                          setConvertedCustomerId(null);
+                        }}
+                      >
+                        Sluiten
+                      </Button>
+                      <Link href={`/admin/klanten/${convertedCustomerId}`}>
+                        <Button style={{ backgroundColor: colors.blue }} className="hover:opacity-90 text-white">
+                          Bekijk klant <ExternalLink className="w-4 h-4 ml-2" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  // Confirmation state
+                  <>
+                    <div className="rounded-lg p-4 border" style={{ backgroundColor: colors.blueLight, borderColor: colors.blue }}>
+                      <p className="font-medium mb-2" style={{ color: colors.dark }}>
+                        De volgende gegevens worden overgenomen:
+                      </p>
+                      <ul className="text-sm space-y-1" style={{ color: colors.slate }}>
+                        <li>• Naam: <strong>{lead.name}</strong></li>
+                        {lead.email && <li>• Email: {lead.email}</li>}
+                        {lead.phone && <li>• Telefoon: {lead.phone}</li>}
+                        {lead.address && <li>• Adres: {lead.address}</li>}
+                        {lead.city && <li>• Plaats: {lead.city}</li>}
+                      </ul>
+                    </div>
+
+                    <div className="rounded-lg p-4 border" style={{ backgroundColor: colors.orangeLight, borderColor: colors.orange }}>
+                      <p className="text-sm" style={{ color: colors.dark }}>
+                        <strong>Let op:</strong> Na conversie wordt de lead status automatisch
+                        op "Gewonnen" gezet. Eventuele offertes en projecten worden gekoppeld
+                        aan de nieuwe klant.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowConvertModal(false)}
+                        className="flex-1"
+                        disabled={converting}
+                      >
+                        Annuleren
+                      </Button>
+                      <Button
+                        onClick={convertToCustomer}
+                        disabled={converting}
+                        style={{ backgroundColor: colors.blue }}
+                        className="flex-1 hover:opacity-90 text-white"
+                      >
+                        {converting ? 'Converteren...' : 'Bevestig conversie'}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>

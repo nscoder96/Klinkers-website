@@ -70,7 +70,7 @@ export default function KoppelprijsCheck({ totaalExclBtw, uurprijs, totalM2 }: K
             <span className="text-sm text-slate-500">≈ {dagequivalent} dag{dagequivalent !== 1 ? 'en' : ''}</span>
           </div>
           <p className="text-xs text-slate-500 mb-2">
-            €{totaalExclBtw.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ÷ €{uurprijs}/uur
+            €{totaalExclBtw.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} arbeid ÷ €{uurprijs}/uur
           </p>
           <div className={`flex items-center gap-1.5 ${textColor}`}>
             <Icon className="w-3.5 h-3.5 flex-shrink-0" />

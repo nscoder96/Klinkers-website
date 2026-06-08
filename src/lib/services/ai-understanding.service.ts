@@ -17,6 +17,7 @@ import {
   AIUnderstandingResultSchema,
   AIUnderstandingResult,
 } from "../schemas/ai-understanding.schema";
+import { TOP_20_RULES_FOR_PROMPT } from "../rules/garden-element-rules";
 
 /**
  * System prompt for the AI Understanding service.
@@ -96,7 +97,9 @@ Extraheer alle genoemde afmetingen:
 - "20 meter schutting" → length: 20
 - "3 bomen" → count: 3
 
-Als je afmetingen kunt afleiden (bijv. 5x3m = 15m2), geef dan beide.`;
+Als je afmetingen kunt afleiden (bijv. 5x3m = 15m2), geef dan beide.
+
+${TOP_20_RULES_FOR_PROMPT}`;
 
 /**
  * Analyzes schouwnotities (inspection notes) to detect work activities.
@@ -123,7 +126,7 @@ export async function analyzeNotes(
   const client = new Anthropic();
 
   const response = await client.beta.messages.parse({
-    model: "claude-sonnet-4-5-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 2000,
     betas: ["structured-outputs-2025-11-13"],
     system: UNDERSTANDING_PROMPT,

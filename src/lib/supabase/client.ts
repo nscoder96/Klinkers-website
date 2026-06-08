@@ -50,9 +50,11 @@ export interface Lead {
 
 export interface Pricing {
   id: string;
+  tenant_id?: string;  // NULL = system default, UUID = tenant-specific
   category: string;
   item_name: string;
   item_description?: string;
+  item_type?: 'arbeid' | 'materiaal';
   unit: string;
   cost_price?: number;
   labor_hours_per_unit?: number;
@@ -63,6 +65,31 @@ export interface Pricing {
   is_active: boolean;
   notes?: string;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface LinkedTask {
+  name: string;
+  unit: string;
+  enabled: boolean;
+}
+
+export interface WorkRule {
+  id: string;
+  tenant_id?: string;  // NULL = system default
+  activity_name: string;
+  activity_slug: string;
+  category: string;
+  unit_price?: number;
+  hourly_rate?: number;
+  hours_per_unit?: number;
+  default_unit?: string;
+  linked_tasks: LinkedTask[];
+  quantity_formula?: string;  // e.g., 'area', 'perimeter', 'area * 1.1'
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface Quote {

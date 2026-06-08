@@ -207,7 +207,7 @@ export async function POST(request: Request) {
 
     // First API call - may include tool use
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       tools: tools,
@@ -253,7 +253,7 @@ export async function POST(request: Request) {
 
         // Get final response after tool use
         const finalResponse = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 500,
           system: SYSTEM_PROMPT,
           tools: tools,

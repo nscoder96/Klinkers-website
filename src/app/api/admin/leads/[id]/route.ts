@@ -83,3 +83,57 @@ export async function PATCH(
     return NextResponse.json({ error: 'Er ging iets mis' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = createServerClient();
+
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database niet beschikbaar' }, { status: 500 });
+    }
+
+    // Get lead info
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('name, quotes(id)')
+      .eq('id', id)
+      .single();
+
+    if (!lead) {
+      return NextResponse.json({ error: 'Lead niet gevonden' }, { status: 404 });
+    }
+
+    // Check if lead has quotes
+    if (lead.quotes && lead.quotes.length > 0) {
+      return NextResponse.json({
+        error: `Deze lead heeft ${lead.quotes.length} offerte(s). Verwijder eerst de offertes voordat je de lead verwijdert.`
+      }, { status: 400 });
+    }
+
+    // Delete lead activities first
+    await supabase
+      .from('lead_activities')
+      .delete()
+      .eq('lead_id', id);
+
+    // Delete the lead
+    const { error: deleteError } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('Error deleting lead:', deleteError);
+      return NextResponse.json({ error: 'Kon lead niet verwijderen' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Lead delete error:', error);
+    return NextResponse.json({ error: 'Er ging iets mis' }, { status: 500 });
+  }
+}

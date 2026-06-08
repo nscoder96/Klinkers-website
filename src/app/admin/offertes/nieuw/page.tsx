@@ -25,6 +25,8 @@ import MultiFormatInput from '@/components/quote/MultiFormatInput';
 import AnalysisProgress from '@/components/quote/AnalysisProgress';
 import KoppelprijsCheck from '@/components/quote/KoppelprijsCheck';
 import QuoteEditorTable, { Section, LineItem } from '@/components/quotes/QuoteEditorTable';
+import WorkBreakdownEditor, { WorkBreakdownEditorState } from '@/components/quotes/WorkBreakdownEditor';
+import type { WorkBreakdownV2 } from '@/lib/schemas/work-breakdown-v2.schema';
 
 interface PricingItem {
   id: string;
@@ -110,6 +112,12 @@ export default function NieuweOfferte() {
 
   // Steps: 'input' | 'analyzing' | 'editor'
   const [step, setStep] = useState<'input' | 'analyzing' | 'editor'>('input');
+
+  // V2 Pipeline state
+  const [pipelineVersion, setPipelineVersion] = useState<'v1' | 'v2'>('v2');
+  const [workBreakdownV2, setWorkBreakdownV2] = useState<WorkBreakdownV2 | null>(null);
+  const [workBreakdownEditorState, setWorkBreakdownEditorState] = useState<WorkBreakdownEditorState | null>(null);
+  const [analyzingV2, setAnalyzingV2] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -236,6 +244,135 @@ export default function NieuweOfferte() {
       }
     } catch (error) {
       console.error('Error saving quote:', error);
+      alert('Er ging iets mis bij het opslaan');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // V2: Analyseer met nieuwe pipeline
+  const analyzeV2 = async () => {
+    if (!kladNotities.trim()) return;
+    setAnalyzingV2(true);
+    setStep('analyzing');
+    try {
+      const response = await fetch('/api/admin/analyze-v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: kladNotities }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        alert('Analyse mislukt: ' + (err.error || 'Onbekende fout'));
+        setStep('input');
+        return;
+      }
+      const data = await response.json();
+      setWorkBreakdownV2(data.breakdown);
+      setStep('editor');
+    } catch (error) {
+      console.error('V2 analyse fout:', error);
+      alert('Er ging iets mis tijdens de analyse');
+      setStep('input');
+    } finally {
+      setAnalyzingV2(false);
+    }
+  };
+
+  // V2: Offerte opslaan met work_items
+  const saveQuoteV2 = async () => {
+    if (!workBreakdownEditorState && !workBreakdownV2) return;
+    setSaving(true);
+    try {
+      const breakdown = workBreakdownEditorState?.breakdown ?? workBreakdownV2!;
+
+      // Verzamel alle werkitems voor work_items tabel
+      const allWorkItems: Array<{
+        section_name: string;
+        description: string;
+        hours_estimated: number;
+        material_flag: string;
+        material_qty?: number;
+        material_unit?: string;
+        material_desc?: string;
+        work_type_key?: string;
+        display_order: number;
+      }> = [];
+      let order = 0;
+
+      // Voorbereidend werk
+      for (const item of breakdown.preparatory.items) {
+        allWorkItems.push({
+          section_name: breakdown.preparatory.name,
+          description: item.description,
+          hours_estimated: item.hours_estimated,
+          material_flag: item.material_flag,
+          material_qty: item.material_qty,
+          material_unit: item.material_unit,
+          material_desc: item.material_desc,
+          work_type_key: item.work_type_key,
+          display_order: order++,
+        });
+      }
+
+      // Gebieden
+      for (const area of breakdown.areas) {
+        for (const item of area.items) {
+          allWorkItems.push({
+            section_name: area.name,
+            description: item.description,
+            hours_estimated: item.hours_estimated,
+            material_flag: item.material_flag,
+            material_qty: item.material_qty,
+            material_unit: item.material_unit,
+            material_desc: item.material_desc,
+            work_type_key: item.work_type_key,
+            display_order: order++,
+          });
+        }
+      }
+
+      // Sla quote op (gebruik project_description als samenvatting)
+      const quoteResponse = await fetch('/api/admin/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          customer_email: customerEmail,
+          customer_address: customerAddress,
+          project_description: breakdown.project_summary,
+          sections: [], // V2 gebruikt work_items ipv sections
+          status: 'draft',
+          existing_lead_id: selectedLeadId,
+          pipeline_version: 'v2',
+        }),
+      });
+
+      if (!quoteResponse.ok) {
+        alert('Opslaan offerte mislukt');
+        return;
+      }
+
+      const quoteData = await quoteResponse.json();
+      const quoteId = quoteData.quote.id;
+
+      // Sla work_items op
+      if (allWorkItems.length > 0) {
+        await fetch('/api/admin/work-items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quote_id: quoteId,
+            items: allWorkItems,
+            trigger_learning: true,
+          }),
+        });
+      }
+
+      router.push(`/admin/offertes/${quoteId}`);
+    } catch (error) {
+      console.error('V2 opslaan fout:', error);
       alert('Er ging iets mis bij het opslaan');
     } finally {
       setSaving(false);
@@ -461,9 +598,26 @@ export default function NieuweOfferte() {
             <Card className="lg:col-span-2 border-slate-200 shadow-sm flex flex-col">
               <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between">
                 <CardTitle className="text-base font-semibold text-slate-900">Project Notities</CardTitle>
-                <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded-full border border-purple-200">
-                  AI Powered
-                </span>
+                <div className="flex items-center gap-2">
+                  {/* Pipeline version toggle */}
+                  <div className="flex items-center bg-white border border-slate-200 rounded-full p-0.5 text-xs">
+                    <button
+                      onClick={() => setPipelineVersion('v2')}
+                      className={`px-3 py-1 rounded-full transition-all font-medium ${pipelineVersion === 'v2' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Uren-model
+                    </button>
+                    <button
+                      onClick={() => setPipelineVersion('v1')}
+                      className={`px-3 py-1 rounded-full transition-all font-medium ${pipelineVersion === 'v1' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Klassiek
+                    </button>
+                  </div>
+                  <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded-full border border-purple-200">
+                    AI Powered
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="p-6 flex-1 flex flex-col">
                 <div className="flex-1">
@@ -534,16 +688,19 @@ export default function NieuweOfferte() {
                   </Button>
                   <Button
                     onClick={() => {
-                      if (kladNotities.trim()) {
+                      if (!kladNotities.trim()) return;
+                      if (pipelineVersion === 'v2') {
+                        analyzeV2();
+                      } else {
                         setAnalyzing(true);
                         setShowAnalysisProgress(true);
                         setStep('analyzing');
                       }
                     }}
                     disabled={!kladNotities.trim()}
-                    className="bg-slate-900 text-white hover:bg-slate-800 px-6"
+                    className={`px-6 ${pipelineVersion === 'v2' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'} text-white`}
                   >
-                    Genereer Offerte
+                    {pipelineVersion === 'v2' ? 'Analyseer (uren-model)' : 'Genereer Offerte'}
                     <ChevronRight className="w-4 h-4 ml-2" />
                   </Button>
                 </div>
@@ -553,6 +710,18 @@ export default function NieuweOfferte() {
         )}
 
         {/* Step 2: Analysis */}
+        {step === 'analyzing' && analyzingV2 && (
+          <div className="max-w-2xl mx-auto py-12 flex flex-col items-center gap-6">
+            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-lg font-semibold text-slate-900">Werkopsplitsing maken...</h2>
+              <p className="text-sm text-slate-500 mt-1">AI analyseert de notities en schat uren per gebied</p>
+            </div>
+          </div>
+        )}
+
         {step === 'analyzing' && showAnalysisProgress && (
           <div className="max-w-2xl mx-auto py-12">
             <Card className="border-0 shadow-2xl">
@@ -574,22 +743,57 @@ export default function NieuweOfferte() {
           </div>
         )}
 
-        {/* Step 3: Editor */}
-        {step === 'editor' && (
+        {/* Step 3: Editor V2 (uren-model) */}
+        {step === 'editor' && workBreakdownV2 && (
+          <div className="animate-fade-in max-w-3xl mx-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Werkdocument</h2>
+                <p className="text-sm text-slate-500">Controleer en pas uren aan — klik op een waarde om te bewerken</p>
+              </div>
+              <Button
+                onClick={saveQuoteV2}
+                disabled={saving}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Offerte opslaan
+              </Button>
+            </div>
+
+            {customerName && (
+              <div className="text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
+                Klant: <strong>{customerName}</strong>
+                {customerAddress && <span className="text-slate-400"> · {customerAddress}</span>}
+              </div>
+            )}
+
+            <WorkBreakdownEditor
+              initialBreakdown={workBreakdownV2}
+              hourlyRate={uurprijs}
+              onChange={(state) => setWorkBreakdownEditorState(state)}
+            />
+          </div>
+        )}
+
+        {/* Step 3: Editor V1 (klassiek) */}
+        {step === 'editor' && !workBreakdownV2 && (
           <div className="animate-fade-in space-y-4">
             {sections.length > 0 && (() => {
-              const totaalExclBtw = sections.reduce((sum, section) =>
-                sum + section.items.reduce((s, item) => s + item.total_price, 0), 0
+              const totaalArbeid = sections.reduce((sum, section) =>
+                sum + section.items
+                  .filter(item => item.line_type === 'arbeid')
+                  .reduce((s, item) => s + item.total_price, 0), 0
               );
               const totalM2 = sections.reduce((sum, section) =>
                 sum + section.items
-                  .filter(item => item.unit === 'm2' && item.line_type === 'materiaal')
+                  .filter(item => (item.unit === 'm²' || item.unit === 'm2') && item.line_type === 'arbeid')
                   .reduce((s, item) => s + item.quantity, 0), 0
               );
               return (
                 <div className="max-w-xs">
                   <KoppelprijsCheck
-                    totaalExclBtw={totaalExclBtw}
+                    totaalExclBtw={totaalArbeid}
                     uurprijs={uurprijs}
                     totalM2={totalM2}
                   />

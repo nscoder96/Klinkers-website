@@ -182,3 +182,89 @@ export async function PATCH(
     return NextResponse.json({ error: 'Er ging iets mis' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = createServerClient();
+
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database niet beschikbaar' }, { status: 500 });
+    }
+
+    // Get quote info for activity logging
+    const { data: quote } = await supabase
+      .from('quotes')
+      .select('quote_number, lead_id, total')
+      .eq('id', id)
+      .single();
+
+    if (!quote) {
+      return NextResponse.json({ error: 'Offerte niet gevonden' }, { status: 404 });
+    }
+
+    // Get section IDs for this quote
+    const { data: sections } = await supabase
+      .from('quote_sections')
+      .select('id')
+      .eq('quote_id', id);
+
+    const sectionIds = sections?.map(s => s.id) || [];
+
+    // Delete in correct order due to foreign key constraints
+    // 1. Delete line items
+    if (sectionIds.length > 0) {
+      await supabase
+        .from('quote_line_items')
+        .delete()
+        .in('section_id', sectionIds);
+    }
+
+    // 2. Delete sections
+    await supabase
+      .from('quote_sections')
+      .delete()
+      .eq('quote_id', id);
+
+    // 3. Delete overhead
+    await supabase
+      .from('quote_overhead')
+      .delete()
+      .eq('quote_id', id);
+
+    // 4. Delete history
+    await supabase
+      .from('quote_history')
+      .delete()
+      .eq('quote_id', id);
+
+    // 5. Delete the quote itself
+    const { error: deleteError } = await supabase
+      .from('quotes')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('Error deleting quote:', deleteError);
+      return NextResponse.json({ error: 'Kon offerte niet verwijderen' }, { status: 500 });
+    }
+
+    // Log activity to lead
+    if (quote.lead_id) {
+      await supabase.from('lead_activities').insert({
+        lead_id: quote.lead_id,
+        activity_type: 'quote_deleted',
+        title: 'Offerte verwijderd',
+        description: `Offerte ${quote.quote_number} (€${quote.total}) is verwijderd`
+      });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Quote delete error:', error);
+    return NextResponse.json({ error: 'Er ging iets mis' }, { status: 500 });
+  }
+}
