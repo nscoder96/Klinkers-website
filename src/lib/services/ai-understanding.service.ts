@@ -109,6 +109,28 @@ Dit is een stratenmakersbedrijf. Herken en gebruik deze vaktermen:
 - **Water:** kolk, kolkaansluiting, drainagegoot
 - **Materieel:** trilplaat, minigraver, steenknipper, container
 
+## KRITIEK — Onderdelen vs losse activiteiten (stratenmaker)
+Een bestratingsklus bestaat uit veel handelingen die SAMEN één activiteit vormen.
+Maak NOOIT losse activiteiten van deze onderdelen — ze horen bij het bestratingswerk
+en worden automatisch toegevoegd door het systeem:
+- afgraven / cunet / grondwerk vooraf
+- zandbed / straatzand aanbrengen
+- opsluitbanden / trottoirbanden stellen
+- aantrillen, invegen, voegen, afreien, afschot
+
+Voeg in plaats van losse activiteiten de relevante maten toe aan de
+bestratingsactiviteit zélf:
+- "afgraven 20cm" → zet \`afgraafdiepte_cm: 20\` op de bestratingsactiviteit (GEEN aparte grondwerk-activiteit)
+- "zandbed 10cm" → zet \`zanddikte_cm: 10\` op de bestratingsactiviteit
+- "opsluitbanden rondom" → GEEN aparte activiteit (zit al in de bestrating)
+
+Maak ALLEEN een aparte activiteit bij:
+- een fysiek ander oppervlak/onderdeel (bv. losse oprit én los terras)
+- verwijderen/opbreken van bestaand werk dat los staat van de nieuwe aanleg
+- echt los grondwerk waar GEEN bestrating bovenop komt
+Forfaitaire extra's (kolkaansluiting, drainagegoot) mogen een eigen activiteit
+zijn met categorie 'overig'.
+
 ## KRITIEK — Gouda/eigenaar-specifieke extractie (afgraafdiepte + zanddikte)
 De eigenaar werkt in Gouda (veengrond) en noteert ZELF of er afgegraven moet
 worden en hoeveel cm zand erop moet.

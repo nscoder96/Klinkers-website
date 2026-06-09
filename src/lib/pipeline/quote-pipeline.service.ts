@@ -14,6 +14,7 @@
  */
 
 import { selectAssembly, type Assembly } from "../assembly/assembly-firing.service";
+import { consolidatePavingActivities } from "./activity-consolidation";
 import type { AssemblyWithComponents } from "../assembly/assembly-loader";
 import {
   expandAssembly,
@@ -183,7 +184,11 @@ export function runQuotePipeline(
   pricingDb: PricingRow[],
   config: PipelineConfig
 ): PipelineResult {
-  const sections = activities.map((a) =>
+  // Consolideer losse onderdelen (afgraven, opsluitbanden) in hun bestratingsklus
+  // vóór de firing — repareert hoe de AI realistische input opsplitst.
+  const consolidated = consolidatePavingActivities(activities);
+
+  const sections = consolidated.map((a) =>
     processActivity(a, assemblies, pricingDb, config)
   );
 
