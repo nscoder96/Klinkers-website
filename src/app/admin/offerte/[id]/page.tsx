@@ -727,7 +727,7 @@ export default function OfferteMaker() {
     setAiAnalysis('');
     setAiSuggestions([]);
     try {
-      const response = await fetch('/api/admin/analyze-notes', {
+      const response = await fetch('/api/admin/quote/generate-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notes: kladNotities })
@@ -735,179 +735,66 @@ export default function OfferteMaker() {
 
       if (response.ok) {
         const data = await response.json();
-        setAiAnalysis(data.analysis);
-        setAiSuggestions(data.suggestions || []);
+        setAiAnalysis(data.ai?.summary || '');
+        setAiSuggestions(data.pipeline?.flags || []);
 
-        if (data.analysis) {
-          setProjectDescription(data.analysis);
+        if (data.ai?.summary) {
+          setProjectDescription(data.ai.summary);
         }
 
-        // Convert AI sections (grouped by category) to our sections format
-        if (data.sections && data.sections.length > 0) {
-          const newSections: Section[] = data.sections.map((section: {
-            category: string;
-            title: string;
-            items: Array<{
-              id?: string;
-              pricing_id?: string;
-              description: string;
-              quantity: number;
-              unit: string;
-              unit_price: number;
-              reasoning?: string;
-              line_type?: 'materiaal' | 'arbeid';
-              sub_items?: Array<{
-                description: string;
-                quantity: number;
-                unit: string;
-                reasoning?: string;
-              }>;
-            }>;
-          }, index: number) => {
-            const sectionItems: LineItem[] = section.items.map((item) => ({
-              id: item.id || crypto.randomUUID(),
+        // Pipeline-secties (generate-v2) → paginasecties; centen → euro's.
+        const pipelineSections = (data.pipeline?.sections || []) as Array<{
+          title: string;
+          display_lines: Array<{
+            description: string;
+            line_type: string;
+            quantity: number;
+            unit: string;
+            unit_price_cents: number | null;
+            total_cents: number | null;
+            pricing_id: string | null;
+          }>;
+        }>;
+
+        const newSections: Section[] = pipelineSections
+          .filter((s) => s.display_lines.length > 0)
+          .map((s, index) => {
+            const sectionItems: LineItem[] = s.display_lines.map((line) => ({
+              id: crypto.randomUUID(),
               section_id: '',
-              pricing_id: item.pricing_id || null,
-              description: item.description,
-              quantity: item.quantity,
-              unit: item.unit,
+              pricing_id: line.pricing_id || null,
+              description: line.description,
+              quantity: line.quantity,
+              unit: line.unit,
               cost_price: null,
               markup_percent: null,
-              unit_price: item.unit_price,
-              total_price: item.quantity * item.unit_price,
+              unit_price: (line.unit_price_cents ?? 0) / 100,
+              total_price: (line.total_cents ?? 0) / 100,
               vat_rate: 21,
               display_order: 0,
               is_auto_calculated: true,
-              formula_used: item.reasoning || null,
+              formula_used: null,
               show_on_quote: true,
               internal_notes: null,
-              reasoning: item.reasoning || null,
-              line_type: item.line_type || 'materiaal',
-              // Store sub_items as custom data for werkbon
-              sub_items: item.sub_items
-            } as LineItem & { sub_items?: typeof item.sub_items }));
+              reasoning: null,
+              line_type: line.line_type === 'arbeid' ? 'arbeid' : 'materiaal'
+            } as LineItem));
 
             const sectionSubtotal = sectionItems.reduce((sum, item) => sum + item.total_price, 0);
 
             return {
               id: crypto.randomUUID(),
               quote_id: quoteId || '',
-              title: section.title || getCategoryLabel(section.category),
+              title: s.title,
               description: null,
               display_order: sections.length + index + 1,
               subtotal: sectionSubtotal,
-              line_items: sectionItems,
-              category: section.category
-            } as Section & { category?: string };
+              line_items: sectionItems
+            } as Section;
           });
 
+        if (newSections.length > 0) {
           setSections([...sections, ...newSections]);
-        } else if (data.lineItems && data.lineItems.length > 0) {
-          // Fallback: group items by category from lineItems
-          const itemsByCategory = data.lineItems.reduce((acc: Record<string, Array<{
-            id?: string;
-            pricing_id?: string;
-            description: string;
-            quantity: number;
-            unit: string;
-            unit_price: number;
-            category?: string;
-            reasoning?: string;
-            sub_items?: Array<{
-              description: string;
-              quantity: number;
-              unit: string;
-              reasoning?: string;
-            }>;
-          }>>, item: {
-            id?: string;
-            pricing_id?: string;
-            description: string;
-            quantity: number;
-            unit: string;
-            unit_price: number;
-            category?: string;
-            reasoning?: string;
-            sub_items?: Array<{
-              description: string;
-              quantity: number;
-              unit: string;
-              reasoning?: string;
-            }>;
-          }) => {
-            const cat = item.category || 'overig';
-            if (!acc[cat]) acc[cat] = [];
-            acc[cat].push(item);
-            return acc;
-          }, {});
-
-          // Create sections per category in the correct order
-          const categoryOrder = ['grondwerk', 'bestrating', 'erfafscheiding', 'vlonders', 'gazon', 'beplanting', 'overkappingen', 'waterwerken', 'verlichting', 'overig'];
-          const newSections: Section[] = [];
-
-          type AILineItem = {
-            id?: string;
-            pricing_id?: string;
-            description: string;
-            quantity: number;
-            unit: string;
-            unit_price: number;
-            category?: string;
-            reasoning?: string;
-            line_type?: 'materiaal' | 'arbeid';
-            sub_items?: Array<{
-              description: string;
-              quantity: number;
-              unit: string;
-              reasoning?: string;
-            }>;
-          };
-
-          categoryOrder.forEach((cat, index) => {
-            if (itemsByCategory[cat] && itemsByCategory[cat].length > 0) {
-              const sectionItems: LineItem[] = itemsByCategory[cat].map((item: AILineItem) => ({
-                id: item.id || crypto.randomUUID(),
-                section_id: '',
-                pricing_id: item.pricing_id || null,
-                description: item.description,
-                quantity: item.quantity,
-                unit: item.unit,
-                cost_price: null,
-                markup_percent: null,
-                unit_price: item.unit_price,
-                total_price: item.quantity * item.unit_price,
-                vat_rate: 21,
-                display_order: 0,
-                is_auto_calculated: true,
-                formula_used: item.reasoning || null,
-                show_on_quote: true,
-                internal_notes: null,
-                reasoning: item.reasoning || null,
-                line_type: item.line_type || 'materiaal',
-                sub_items: item.sub_items
-              } as LineItem & { sub_items?: typeof item.sub_items }));
-
-              const sectionSubtotal = sectionItems.reduce((sum, item) => sum + item.total_price, 0);
-
-              newSections.push({
-                id: crypto.randomUUID(),
-                quote_id: quoteId || '',
-                title: getCategoryLabel(cat),
-                description: null,
-                display_order: sections.length + index + 1,
-                subtotal: sectionSubtotal,
-                line_items: sectionItems
-              });
-            }
-          });
-
-          if (newSections.length > 0) {
-            setSections([...sections, ...newSections]);
-          }
-        }
-
-        if (data.newItemsAdded && data.newItemsAdded.length > 0) {
-          alert(`${data.newItemsAdded.length} nieuwe prijsitem(s) toegevoegd aan je prijslijst:\n\n• ${data.newItemsAdded.join('\n• ')}`);
         }
       } else {
         const error = await response.json();

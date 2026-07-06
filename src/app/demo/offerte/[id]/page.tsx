@@ -192,8 +192,8 @@ export default function DemoOfferteMaker() {
     setAiSuggestions([]);
 
     try {
-      // Use the admin analyze-notes endpoint (same logic works for demo)
-      const response = await fetch('/api/admin/analyze-notes', {
+      // Zelfde geconsolideerde pipeline als admin: generate-v2 (zonder persist).
+      const response = await fetch('/api/admin/quote/generate-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notes: kladNotities })
@@ -201,43 +201,46 @@ export default function DemoOfferteMaker() {
 
       if (response.ok) {
         const data = await response.json();
-        setAiAnalysis(data.analysis);
-        setAiSuggestions(data.suggestions || []);
-        // Update project description with analysis
-        if (data.analysis) {
-          setProjectDescription(data.analysis);
+        setAiAnalysis(data.ai?.summary || '');
+        setAiSuggestions(data.pipeline?.flags || []);
+        if (data.ai?.summary) {
+          setProjectDescription(data.ai.summary);
         }
 
-        // Store sections with element titles for grouped display
-        if (data.sections && data.sections.length > 0) {
-          const newSections: OfferteSection[] = data.sections.map((section: { element_title?: string; title?: string; category?: string; items?: Array<{ id?: string; pricing_id?: string; description: string; quantity: number; unit: string; unit_price: number; line_type?: string; reasoning?: string }> }) => ({
+        // Pipeline-secties (generate-v2) → demosecties; centen → euro's.
+        const pipelineSections = (data.pipeline?.sections || []) as Array<{
+          title: string;
+          display_lines: Array<{
+            description: string;
+            line_type: string;
+            quantity: number;
+            unit: string;
+            unit_price_cents: number | null;
+            total_cents: number | null;
+            pricing_id: string | null;
+          }>;
+        }>;
+
+        const newSections: OfferteSection[] = pipelineSections
+          .filter((s) => s.display_lines.length > 0)
+          .map((s) => ({
             id: crypto.randomUUID(),
-            element_title: section.element_title || section.title || 'Overig',
-            category: section.category || 'overig',
-            items: (section.items || []).map((item) => ({
-              id: item.id || crypto.randomUUID(),
-              pricing_id: item.pricing_id || '',
-              description: item.description,
-              quantity: item.quantity,
-              unit: item.unit,
-              unit_price: item.unit_price,
-              total: item.quantity * item.unit_price,
-              reasoning: item.reasoning,
-              line_type: (item.line_type as 'materiaal' | 'arbeid') || undefined,
-              category: section.category || 'overig',
+            element_title: s.title,
+            category: 'overig',
+            items: s.display_lines.map((line) => ({
+              id: crypto.randomUUID(),
+              pricing_id: line.pricing_id || '',
+              description: line.description,
+              quantity: line.quantity,
+              unit: line.unit,
+              unit_price: (line.unit_price_cents ?? 0) / 100,
+              total: (line.total_cents ?? 0) / 100,
+              line_type: (line.line_type === 'arbeid' ? 'arbeid' : 'materiaal') as 'materiaal' | 'arbeid',
+              category: 'overig',
             })),
           }));
-          setSections(newSections);
-          // Flatten for totals and save
-          setLineItems(newSections.flatMap(s => s.items));
-        } else {
-          setLineItems(data.lineItems || []);
-          setSections([]);
-        }
-        // Show notification if new items were added to pricing database
-        if (data.newItemsAdded && data.newItemsAdded.length > 0) {
-          alert(`${data.newItemsAdded.length} nieuwe prijsitem(s) toegevoegd aan je prijslijst:\n\n• ${data.newItemsAdded.join('\n• ')}\n\nDeze kun je terugvinden en aanpassen in Prijzen beheer.`);
-        }
+        setSections(newSections);
+        setLineItems(newSections.flatMap(s => s.items));
       } else {
         const error = await response.json();
         alert('Analyse mislukt: ' + (error.error || 'Onbekende fout'));
