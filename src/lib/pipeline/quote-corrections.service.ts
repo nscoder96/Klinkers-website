@@ -13,6 +13,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Activity } from "../schemas/ai-understanding.schema";
 
 /** Snapshot van één offerteregel, zoals gepersisteerd (prijzen in euro's). */
 export interface QuoteLineSnapshot {
@@ -115,6 +116,108 @@ export function diffQuoteLines(
   }
 
   return rows;
+}
+
+/**
+ * Bevestigde activiteit uit de bevestigingsstap (C2.4): de AI-activiteit
+ * zoals de gebruiker hem heeft goedgekeurd, met de index van het origineel
+ * in `ai_output.activities` zodat de diff weet welke activiteit dit was.
+ */
+export type ConfirmedActivity = Activity & { original_index: number };
+
+/** De velden die de gebruiker in de bevestigingsstap kan corrigeren. */
+const EXTRACTION_DIM_FIELDS = [
+  "length",
+  "width",
+  "area",
+  "afgraafdiepte_cm",
+  "zanddikte_cm",
+  "opsluiting_lengte_m",
+] as const;
+
+function dimensionsChanged(a: Activity, b: Activity): boolean {
+  return EXTRACTION_DIM_FIELDS.some(
+    (f) => (a.dimensions?.[f] ?? null) !== (b.dimensions?.[f] ?? null)
+  );
+}
+
+/**
+ * Puur (C2.4): verschillen tussen de originele AI-extractie en de bevestigde
+ * activiteiten. Eén rij per verwijderde activiteit (new_value null) en één
+ * rij per activiteit met gecorrigeerde afmetingen — de correctie is één
+ * bewuste handeling, dus geen rij per veld zoals bij de regel-diff.
+ */
+export function diffExtractionActivities(
+  original: Activity[],
+  confirmed: ConfirmedActivity[]
+): CorrectionRow[] {
+  const rows: CorrectionRow[] = [];
+  const byIndex = new Map(confirmed.map((c) => [c.original_index, c]));
+
+  original.forEach((o, i) => {
+    const c = byIndex.get(i);
+    if (!c) {
+      rows.push({
+        correction_type: "extraction_corrected",
+        line_description: o.description,
+        old_value: o,
+        new_value: null,
+      });
+      return;
+    }
+    if (dimensionsChanged(o, c)) {
+      rows.push({
+        correction_type: "extraction_corrected",
+        line_description: o.description,
+        old_value: { dimensions: o.dimensions },
+        new_value: { dimensions: c.dimensions },
+      });
+    }
+  });
+
+  return rows;
+}
+
+/**
+ * Schrijft de extractie-correcties weg zodra de offerte bestaat (persist) —
+ * eerder kan niet: quote_line_corrections.quote_id is not null. Zelfde
+ * niet-blokkerende patroon als recordQuoteCorrections. Geeft het aantal
+ * weggeschreven rijen terug, of null bij een fout.
+ */
+export async function recordExtractionCorrections(
+  supabase: SupabaseClient,
+  quoteId: string,
+  generationRunId: string | null,
+  original: Activity[],
+  confirmed: ConfirmedActivity[]
+): Promise<number | null> {
+  try {
+    const corrections = diffExtractionActivities(original, confirmed);
+    if (corrections.length === 0) return 0;
+
+    const { error } = await supabase.from("quote_line_corrections").insert(
+      corrections.map((c) => ({
+        quote_id: quoteId,
+        generation_run_id: generationRunId,
+        correction_type: c.correction_type,
+        line_description: c.line_description,
+        old_value: c.old_value,
+        new_value: c.new_value,
+      }))
+    );
+
+    if (error) {
+      console.error("[QuoteCorrections] Wegschrijven extractie-correcties mislukt:", error.message);
+      return null;
+    }
+    return corrections.length;
+  } catch (e) {
+    console.error(
+      "[QuoteCorrections] Wegschrijven extractie-correcties mislukt:",
+      e instanceof Error ? e.message : e
+    );
+    return null;
+  }
 }
 
 /**

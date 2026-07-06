@@ -1,10 +1,15 @@
 'use client';
 
 /**
- * Offerte-generator V2 (F8) — 3-stappen flow, tablet-proof.
+ * Offerte-generator V2 (F8 + C2.4) — 3-stappen flow, tablet-proof.
  *   Stap 1: Opdracht invoeren
- *   Stap 2: Analyse reviewen (onderdelen + vlaggen)
+ *   Stap 2: Bevestigen (C2.4) — de AI-extractie corrigeren/bevestigen;
+ *           er wordt pas geëxpandeerd en geprijsd ná expliciete bevestiging.
  *   Stap 3: Offerte finaliseren — bewerkbare regels, drag & drop, BTW-toggle
+ *
+ * API-fasen: 'extract' (Laag 1 + run-log) → 'price' (pipeline over de
+ * bevestigde activiteiten; persist stuurt dezelfde bevestigde set mee zodat
+ * wat je zag ook is wat er opgeslagen wordt).
  */
 
 import { useState, useCallback } from 'react';
@@ -48,15 +53,34 @@ interface Section {
   distribution: Distribution | null;
   flags: QuoteFlag[];
 }
-interface Activity {
+interface AIActivity {
   type: string;
   action: string;
   description: string;
-  dimensions: { area?: number; length?: number; width?: number };
+  dimensions: {
+    length?: number;
+    width?: number;
+    height?: number;
+    count?: number;
+    area?: number;
+    afgraafdiepte_cm?: number;
+    zanddikte_cm?: number;
+    opsluiting_lengte_m?: number;
+  };
+  source_text: string;
+  materials_mentioned: string[];
   missing_dimensions?: boolean;
+  estimated_hours?: number;
 }
-interface PipelineResponse {
-  ai: { summary: string; confidence: number; activities: Activity[] };
+/** Bevestigde activiteit: het origineel + de index in de AI-output (voor de correctie-diff). */
+type ConfirmedActivity = AIActivity & { original_index: number };
+
+interface ExtractResponse {
+  generationRunId: string | null;
+  ai: { summary: string; confidence: number; activities: AIActivity[] };
+}
+interface PriceResponse {
+  generationRunId: string | null;
   config: { method: string; layout: string };
   pipeline: {
     sections: Section[];
@@ -64,6 +88,13 @@ interface PipelineResponse {
     flags: QuoteFlag[];
     hasBlockingFlags: boolean;
   };
+  persistence?: { quoteId: string; quoteNumber: string } | null;
+}
+
+/** Bruikbare afmeting: oppervlak, of lengte × breedte. Anders rood (C2.4). */
+function hasDimensions(a: AIActivity): boolean {
+  const d = a.dimensions;
+  return (d.area ?? 0) > 0 || ((d.length ?? 0) > 0 && (d.width ?? 0) > 0);
 }
 
 // --- Helpers ---
@@ -139,12 +170,15 @@ export default function NieuwV2Page() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PipelineResponse | null>(null);
+  const [extraction, setExtraction] = useState<ExtractResponse | null>(null);
+  const [confirmed, setConfirmed] = useState<ConfirmedActivity[]>([]);
+  const [result, setResult] = useState<PriceResponse | null>(null);
   const [editableSections, setEditableSections] = useState<EditableSection[]>([]);
   const [savedNumber, setSavedNumber] = useState<string | null>(null);
   const [savedQuoteId, setSavedQuoteId] = useState<string | null>(null);
   const [showIncl, setShowIncl] = useState(false);
 
+  // C2.4 fase 1: alleen AI-extractie — er wordt nog niets berekend.
   const analyze = async () => {
     setLoading(true);
     setError(null);
@@ -152,13 +186,46 @@ export default function NieuwV2Page() {
       const res = await fetch('/api/admin/quote/generate-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes, method, projectAddress: customerAddress }),
+        body: JSON.stringify({ phase: 'extract', notes, method }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Analyse mislukt');
+      setExtraction(data);
+      setConfirmed(
+        data.ai.activities.map((a: AIActivity, i: number) => ({
+          ...a,
+          original_index: i,
+        }))
+      );
+      setResult(null);
+      setStep(2);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Er ging iets mis');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // C2.4 fase 2: pipeline over de bevestigde activiteiten ("Klopt, bereken").
+  const calculate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/quote/generate-v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phase: 'price',
+          generationRunId: extraction?.generationRunId ?? null,
+          activities: confirmed,
+          method,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Berekenen mislukt');
       setResult(data);
       setEditableSections(toEditableSections(data.pipeline.sections));
-      setStep(2);
+      setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Er ging iets mis');
     } finally {
@@ -174,10 +241,14 @@ export default function NieuwV2Page() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          notes,
+          phase: 'price',
+          generationRunId: extraction?.generationRunId ?? null,
+          activities: confirmed,
           method,
           persist: true,
-          projectDescription: customerName ? `Offerte voor ${customerName}` : undefined,
+          projectDescription: customerName
+            ? `Offerte voor ${customerName}`
+            : extraction?.ai.summary,
           projectAddress: customerAddress,
           customerName,
           customerPhone,
@@ -194,6 +265,32 @@ export default function NieuwV2Page() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Bevestigingsstap: afmeting corrigeren of activiteit verwijderen (immutable).
+  const updateDimension = (
+    index: number,
+    field: keyof AIActivity['dimensions'],
+    raw: string
+  ) => {
+    const value = raw === '' ? undefined : parseFloat(raw);
+    setConfirmed((prev) =>
+      prev.map((a, i) =>
+        i !== index
+          ? a
+          : {
+              ...a,
+              dimensions: {
+                ...a.dimensions,
+                [field]: value != null && Number.isFinite(value) ? value : undefined,
+              },
+            }
+      )
+    );
+  };
+
+  const removeActivity = (index: number) => {
+    setConfirmed((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateLine = useCallback(
@@ -346,77 +443,105 @@ export default function NieuwV2Page() {
           </div>
         )}
 
-        {/* STAP 2 */}
-        {step === 2 && result && (
+        {/* STAP 2 — Bevestigingsstap (C2.4): niets wordt berekend vóór "Klopt, bereken" */}
+        {step === 2 && extraction && (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-900">Stap 2 · Analyse reviewen</h2>
-            <p className="text-sm text-slate-500">{result.ai.summary}</p>
-
-            {result.pipeline.flags.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  Let op bij de offerte
-                </p>
-                {result.pipeline.flags.map((f, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-2 text-sm ${
-                      f.severity === 'blocking' ? 'text-red-800' : 'text-amber-900'
-                    }`}
-                  >
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>
-                      {f.message}
-                      {f.severity === 'blocking' && (
-                        <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
-                          blokkeert verzenden
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <h2 className="text-lg font-semibold text-slate-900">
+              Stap 2 · Controleer wat de AI heeft gelezen
+            </h2>
+            <p className="text-sm text-slate-500">{extraction.ai.summary}</p>
+            <p className="text-xs text-slate-400">
+              Corrigeer afmetingen of verwijder activiteiten die niet kloppen.
+              Er wordt pas gerekend nadat je bevestigt.
+            </p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {result.ai.activities.map((a, i) => (
-                <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-900">{a.description}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                      {a.action}
-                    </span>
+              {confirmed.map((a, i) => {
+                const incompleet = !hasDimensions(a);
+                return (
+                  <div
+                    key={`${a.original_index}`}
+                    className={`rounded-lg border bg-white p-4 ${
+                      incompleet ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-slate-900">{a.description}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {a.action}
+                        </span>
+                        <button
+                          onClick={() => removeActivity(i)}
+                          className="text-xs text-red-600 underline underline-offset-2"
+                          title="Activiteit verwijderen"
+                        >
+                          Verwijderen
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{a.type}</div>
+
+                    {incompleet && (
+                      <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-red-700">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                        Afmetingen verplicht — vul oppervlak of lengte × breedte in
+                      </p>
+                    )}
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <DimField
+                        label="Lengte (m)"
+                        value={a.dimensions.length}
+                        invalid={incompleet}
+                        onChange={(v) => updateDimension(i, 'length', v)}
+                      />
+                      <DimField
+                        label="Breedte (m)"
+                        value={a.dimensions.width}
+                        invalid={incompleet}
+                        onChange={(v) => updateDimension(i, 'width', v)}
+                      />
+                      <DimField
+                        label="Oppervlak (m²)"
+                        value={a.dimensions.area}
+                        invalid={incompleet}
+                        onChange={(v) => updateDimension(i, 'area', v)}
+                      />
+                      <DimField
+                        label="Afgraafdiepte (cm)"
+                        value={a.dimensions.afgraafdiepte_cm}
+                        onChange={(v) => updateDimension(i, 'afgraafdiepte_cm', v)}
+                      />
+                      <DimField
+                        label="Zanddikte (cm)"
+                        value={a.dimensions.zanddikte_cm}
+                        onChange={(v) => updateDimension(i, 'zanddikte_cm', v)}
+                      />
+                      <DimField
+                        label="Opsluiting (m¹)"
+                        value={a.dimensions.opsluiting_lengte_m}
+                        onChange={(v) => updateDimension(i, 'opsluiting_lengte_m', v)}
+                      />
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    {a.type}
-                    {a.dimensions.area ? ` · ${a.dimensions.area} m²` : ''}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {(() => {
-              const missing = result.ai.activities.filter((a) => a.missing_dimensions);
-              if (missing.length === 0) return null;
-              return (
-                <div className="rounded-lg border border-red-300 bg-red-50 p-4">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-red-800">
-                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                    Afmetingen ontbreken voor: {missing.map((a) => a.description).join(', ')}
-                  </p>
-                  <p className="mt-1 text-xs text-red-700">
-                    Voeg lengte × breedte toe aan de schouwnotitie en analyseer opnieuw voor een correcte offerte.
-                  </p>
-                </div>
-              );
-            })()}
+            {confirmed.length === 0 && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                Alle activiteiten zijn verwijderd — ga terug en pas de notitie aan.
+              </p>
+            )}
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Terug
               </Button>
-              <Button onClick={() => setStep(3)}>
-                Bereken offerte <ArrowRight className="ml-2 h-4 w-4" />
+              <Button onClick={calculate} disabled={loading || confirmed.length === 0}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Klopt, bereken <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -433,6 +558,32 @@ export default function NieuwV2Page() {
                   Sleep secties en regels om te herschikken. Klik op een veld om het aan te passen.
                 </p>
               </div>
+
+              {result.pipeline.flags.length > 0 && (
+                <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                    Let op bij de offerte
+                  </p>
+                  {result.pipeline.flags.map((f, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-2 text-sm ${
+                        f.severity === 'blocking' ? 'text-red-800' : 'text-amber-900'
+                      }`}
+                    >
+                      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                      <span>
+                        {f.message}
+                        {f.severity === 'blocking' && (
+                          <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+                            blokkeert verzenden
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {!combined.distribution.within_norm && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
@@ -568,7 +719,7 @@ export default function NieuwV2Page() {
 // --- Stepper ---
 
 function Stepper({ step }: { step: number }) {
-  const labels = ['Invoer', 'Analyse', 'Finaliseren'];
+  const labels = ['Invoer', 'Bevestigen', 'Finaliseren'];
   return (
     <div className="flex items-center gap-2">
       {labels.map((label, i) => {
@@ -598,6 +749,37 @@ function Stepper({ step }: { step: number }) {
         );
       })}
     </div>
+  );
+}
+
+// --- Afmetingsveld in de bevestigingsstap (C2.4) ---
+
+function DimField({
+  label,
+  value,
+  invalid,
+  onChange,
+}: {
+  label: string;
+  value: number | undefined;
+  invalid?: boolean;
+  onChange: (raw: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] text-slate-500">{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        className={`mt-0.5 w-full rounded border p-1.5 text-sm ${
+          invalid ? 'border-red-300 bg-red-50' : 'border-slate-300'
+        }`}
+      />
+    </label>
   );
 }
 

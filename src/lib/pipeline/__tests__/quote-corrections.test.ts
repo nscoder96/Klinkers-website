@@ -10,9 +10,12 @@ import { describe, it, expect } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   diffQuoteLines,
+  diffExtractionActivities,
   recordQuoteCorrections,
+  type ConfirmedActivity,
   type QuoteLineSnapshot,
 } from "../quote-corrections.service";
+import type { Activity } from "../../schemas/ai-understanding.schema";
 
 function line(partial: Partial<QuoteLineSnapshot>): QuoteLineSnapshot {
   return {
@@ -89,6 +92,65 @@ describe("diffQuoteLines (B3)", () => {
   it("geen wijzigingen → lege diff", () => {
     const regels = [line({ id: "l-1" }), line({ id: "l-2" })];
     expect(diffQuoteLines(regels, regels)).toHaveLength(0);
+  });
+});
+
+// ── diffExtractionActivities: bevestigingsstap (C2.4) ─────────────────────────
+
+function activity(partial: Partial<Activity>): Activity {
+  return {
+    type: "bestrating",
+    action: "nieuw",
+    description: "Oprit klinkers",
+    dimensions: {},
+    source_text: "oprit klinkers",
+    materials_mentioned: [],
+    ...partial,
+  } as Activity;
+}
+
+describe("diffExtractionActivities (C2.4)", () => {
+  it("afmeting gecorrigeerd + activiteit verwijderd → twee extraction_corrected rijen", () => {
+    const origineel = [
+      activity({ description: "Oprit klinkers", dimensions: {} }),
+      activity({ description: "Pad tegels", dimensions: { area: 8 } }),
+    ];
+    const bevestigd: ConfirmedActivity[] = [
+      // Afmeting aangevuld in de bevestigingsstap:
+      { ...activity({ description: "Oprit klinkers", dimensions: { area: 24 } }), original_index: 0 },
+      // "Pad tegels" verwijderd.
+    ];
+
+    const diff = diffExtractionActivities(origineel, bevestigd);
+
+    expect(diff).toHaveLength(2);
+    expect(diff.every((d) => d.correction_type === "extraction_corrected")).toBe(true);
+
+    const gewijzigd = diff.find((d) => d.line_description === "Oprit klinkers")!;
+    expect(gewijzigd.old_value).toEqual({ dimensions: {} });
+    expect(gewijzigd.new_value).toEqual({ dimensions: { area: 24 } });
+
+    const verwijderd = diff.find((d) => d.line_description === "Pad tegels")!;
+    expect(verwijderd.new_value).toBeNull();
+    expect((verwijderd.old_value as Activity).dimensions.area).toBe(8);
+  });
+
+  it("ongewijzigd bevestigd → lege diff", () => {
+    const origineel = [activity({ dimensions: { area: 24, afgraafdiepte_cm: 20 } })];
+    const bevestigd: ConfirmedActivity[] = [
+      { ...origineel[0], original_index: 0 },
+    ];
+    expect(diffExtractionActivities(origineel, bevestigd)).toHaveLength(0);
+  });
+
+  it("afgraafdiepte aangevuld telt als correctie", () => {
+    const origineel = [activity({ dimensions: { area: 24 } })];
+    const bevestigd: ConfirmedActivity[] = [
+      { ...activity({ dimensions: { area: 24, afgraafdiepte_cm: 20 } }), original_index: 0 },
+    ];
+    const diff = diffExtractionActivities(origineel, bevestigd);
+    expect(diff).toHaveLength(1);
+    expect(diff[0].new_value).toEqual({ dimensions: { area: 24, afgraafdiepte_cm: 20 } });
   });
 });
 

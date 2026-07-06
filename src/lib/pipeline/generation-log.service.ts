@@ -36,6 +36,41 @@ export interface GenerationRunInput {
  * Schrijft één generation run weg. Geeft de rij-id terug (voor koppeling
  * met correcties, B3) of null als het wegschrijven mislukte.
  */
+/**
+ * Werkt een bestaande run bij (C2.4): na de prijsfase krijgt de run de
+ * definitieve pipeline-flags, en na persist de quote-koppeling + het
+ * regel-snapshot. Zelfde niet-blokkerende patroon als logGenerationRun.
+ */
+export async function updateGenerationRun(
+  supabase: SupabaseClient,
+  runId: string,
+  patch: {
+    quote_id?: string;
+    flags?: unknown;
+    generated_lines?: unknown;
+    duration_ms?: number;
+  }
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("quote_generation_runs")
+      .update(patch)
+      .eq("id", runId);
+
+    if (error) {
+      console.error("[GenerationLog] Bijwerken generation run mislukt:", error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(
+      "[GenerationLog] Bijwerken generation run mislukt:",
+      e instanceof Error ? e.message : e
+    );
+    return false;
+  }
+}
+
 export async function logGenerationRun(
   supabase: SupabaseClient,
   run: GenerationRunInput
