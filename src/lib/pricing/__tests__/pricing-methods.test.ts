@@ -142,7 +142,7 @@ describe("applyPricingMethod — uren met AI-urenschatting (A1)", () => {
     const arbeid = result.lines.find((l) => l.line_type === "arbeid")!;
     expect(arbeid.quantity).toBe(25.5); // rauwe AI-schatting; dagafronding op offerteniveau
     expect(arbeid.total_cents).toBe(216750);
-    expect(arbeid.description).toContain("25.5 uur");
+    expect(arbeid.description).toContain("25,5 uur"); // Nederlandse notatie
   });
 
   it("geeft géén terugval-vlag als de urenschatting aanwezig is", () => {

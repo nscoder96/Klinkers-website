@@ -235,7 +235,7 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     expect(arbeidUren).toHaveLength(2);
     expect(arbeidUren[0].unit).toBe("uur");
     expect(arbeidUren[0].quantity).toBe(25.5); // rauwe AI-schatting
-    expect(arbeidUren[1].description).toContain("Dagafronding");
+    expect(arbeidUren[1].description).toContain("Afronding naar hele werkdagen");
     expect(arbeidUren[1].quantity).toBe(6.5); // ceil(25.5/8) = 4 dagen × 8 u − 25.5 u
     const somUren = arbeidUren.reduce((acc, l) => acc + l.quantity, 0);
     expect(somUren).toBe(32);
@@ -280,9 +280,13 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     );
     // Drie rauwe uren-regels + één dagafrondingsregel — géén drie losse afrondingen.
     expect(arbeid).toHaveLength(4);
-    const afronding = arbeid.filter((l) => l.description.includes("Dagafronding"));
+    const afronding = arbeid.filter((l) =>
+      l.description.includes("Afronding naar hele werkdagen")
+    );
     expect(afronding).toHaveLength(1);
     expect(afronding[0].quantity).toBe(0.5); // 8 u (1 dag) − 7,5 u geschat
+    // Klantleesbaar: Nederlandse notatie in de omschrijving.
+    expect(afronding[0].description).toContain("1 werkdag · 8 uur");
 
     // Totaal: ceil(7,5/8) = 1 dag = 8 u × €85 = €680.
     // Per sectie afronden zou 3 × 8 u = 24 u = €2.040 geven.
@@ -308,6 +312,40 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     );
     expect(s3.structured!.distribution).toEqual(s1.structured!.distribution);
     expect(s3.flags).toEqual(s1.flags);
+  });
+
+  it("meterprijs: totalen en 55/35/10-check rekenen op exact het bedrag van de all-in offerte-regel (A1)", () => {
+    // Bewust een fixture MET een prijsloze regel (hoofdmateriaal zonder match):
+    // ook dan moet de all-in regel exact gelijk zijn aan de check-basis.
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Oprit klinkers",
+          area_m2: 70,
+          length_m: 14,
+          width_m: 5,
+          afgraafdiepte_cm: 20,
+          zanddikte_cm: 10,
+          // Geen materialPreference → hoofdmateriaalregel blijft 'missing'.
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "meterprijs", layout: "uitgesplitst" }
+    );
+
+    const display = result.sections[0].display!.lines;
+    expect(display).toHaveLength(1);
+    expect(display[0].line_type).toBe("all_in");
+
+    // Wat de klant ziet (all-in regel) == waar totalen en check op rekenen.
+    expect(result.sections[0].structured!.breakdown.subtotal).toBe(display[0].total_cents);
+    expect(result.combined.breakdown.subtotal).toBe(display[0].total_cents);
+
+    // De prijsloze regel blijft wél zichtbaar als blokkerende vlag.
+    expect(result.hasBlockingFlags).toBe(true);
   });
 
   it("uren-methode zonder urenschatting → terugval-vlag zichtbaar op de sectie (A1)", () => {

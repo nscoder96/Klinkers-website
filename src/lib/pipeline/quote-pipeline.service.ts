@@ -29,6 +29,7 @@ import {
 } from "../pricing/pricing-methods.service";
 import { calculateFromHours } from "../services/hours-pricing.service";
 import { toCents, multiplyCents } from "../money";
+import { formatAantal } from "../format";
 import {
   structureQuote,
   addBreakdowns,
@@ -247,7 +248,7 @@ function applyQuoteDayRounding(
 
   const rateCents = toCents(rounded.hourly_rate);
   const roundingLine: MethodLine = {
-    description: `Dagafronding hele werkdagen (${rounded.days} ${rounded.days === 1 ? "dag" : "dagen"} · ${rounded.billable_hours} uur totaal)`,
+    description: `Afronding naar hele werkdagen (totaal ${rounded.days} ${rounded.days === 1 ? "werkdag" : "werkdagen"} · ${formatAantal(rounded.billable_hours)} uur)`,
     line_type: "arbeid",
     quantity: delta,
     unit: "uur",

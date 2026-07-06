@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Font,
 } from '@react-pdf/renderer';
+import { formatAantal } from '@/lib/format';
 
 // Register fonts (using built-in Helvetica)
 Font.register({
@@ -381,7 +382,7 @@ export default function QuotePDF({ quote }: QuotePDFProps) {
               style={index % 2 === 1 ? [styles.tableRow, styles.tableRowAlt] : styles.tableRow}
             >
               <Text style={[styles.tableCell, styles.colDescription]}>{item.description}</Text>
-              <Text style={[styles.tableCell, styles.colQuantity]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, styles.colQuantity]}>{formatAantal(item.quantity)}</Text>
               <Text style={[styles.tableCell, styles.colUnit]}>{item.unit}</Text>
               <Text style={[styles.tableCell, styles.colPrice]}>{formatCurrency(item.unit_price)}</Text>
               <Text style={[styles.tableCell, styles.colTotal]}>{formatCurrency(item.total)}</Text>

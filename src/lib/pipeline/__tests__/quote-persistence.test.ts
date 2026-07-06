@@ -114,7 +114,9 @@ const drieSecties = [
   { type: "bestrating", action: "herstraten", description: "Oprit C", area_m2: 20, estimated_hours: 2.5 },
 ];
 
-async function persistAndCheck(method: "uitgesplitst" | "uren"): Promise<Captured> {
+async function persistAndCheck(
+  method: "uitgesplitst" | "uren" | "meterprijs"
+): Promise<Captured> {
   const pipeline = runQuotePipeline(drieSecties, [herstraten], PRICING, {
     method,
     layout: "uitgesplitst",
@@ -125,7 +127,7 @@ async function persistAndCheck(method: "uitgesplitst" | "uren"): Promise<Capture
 }
 
 describe("persistQuote — totalen uit dezelfde bron als de opgeslagen regels (A1)", () => {
-  it.each(["uitgesplitst", "uren"] as const)(
+  it.each(["uitgesplitst", "uren", "meterprijs"] as const)(
     "methode %s: opgeslagen subtotaal = som van de opgeslagen line-items",
     async (method) => {
       const captured = await persistAndCheck(method);

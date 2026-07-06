@@ -15,6 +15,7 @@
 
 import type { ExpandResult, ExpandedLine } from "../assembly/assembly-expansion.service";
 import { sumCents, toCents, multiplyCents, Cents } from "../money";
+import { formatAantal } from "../format";
 
 export type PriceMethod = "uitgesplitst" | "meterprijs" | "uren";
 
@@ -119,7 +120,7 @@ function toHours(
   const laborFlags = dedupeFlags(laborLines.flatMap((l) => l.flags));
 
   const laborLine: MethodLine = {
-    description: `Arbeid (${hours} uur)`,
+    description: `Arbeid (${formatAantal(hours)} uur)`,
     line_type: "arbeid",
     quantity: hours,
     unit: "uur",
