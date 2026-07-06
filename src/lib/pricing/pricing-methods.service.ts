@@ -48,7 +48,7 @@ export interface PricingMethodConfig {
   crow_m2_per_hour?: number;
 }
 
-const MANUAL_FLAG = "⚠️ Bevat een post zonder prijs — controleer handmatig vóór verzenden";
+const MANUAL_FLAG = "Bevat een post zonder prijs — controleer handmatig vóór verzenden";
 
 /** Methode B: regels ongewijzigd doorzetten. */
 function asMethodLines(lines: ExpandedLine[]): MethodLine[] {

@@ -17,10 +17,14 @@ function deriveArea(d: Activity["dimensions"]): number {
   return 0;
 }
 
-/** Kiest de materiaalvoorkeur: genoemde materialen, anders de omschrijving. */
+/**
+ * Kiest de materiaalvoorkeur: het eerste genoemde materiaal (= het bestratingsmateriaal).
+ * Opsluitbanden, voegzand etc. worden al gedekt door vaste assembly-componenten;
+ * alleen het hoofdmateriaal (klinkers, tegels, kasseien) gaat naar materialPreference.
+ */
 function deriveMaterialPreference(activity: Activity): string | undefined {
   if (activity.materials_mentioned.length > 0) {
-    return activity.materials_mentioned.join(" ");
+    return activity.materials_mentioned[0];
   }
   return activity.description || undefined;
 }
@@ -37,6 +41,7 @@ export function toPipelineActivity(activity: Activity): PipelineActivity {
     width_m: d.width,
     afgraafdiepte_cm: d.afgraafdiepte_cm,
     zanddikte_cm: d.zanddikte_cm,
+    opsluiting_lengte_m: d.opsluiting_lengte_m,
     materialPreference: deriveMaterialPreference(activity),
   };
 }

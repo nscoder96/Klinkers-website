@@ -58,7 +58,7 @@ interface QuoteData {
   total: number;
   customer_notes: string | null;
   created_at: string;
-  leads: Lead;
+  leads: Lead | null;
   // Deddo-style fields
   version?: number;
   work_description?: string | null;

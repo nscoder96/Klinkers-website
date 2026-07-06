@@ -50,6 +50,8 @@ export interface PipelineActivity {
   width_m?: number;
   afgraafdiepte_cm?: number;
   zanddikte_cm?: number;
+  /** Door AI berekende opsluitbandenlengte (m¹) op basis van genoemde zijdes. */
+  opsluiting_lengte_m?: number;
   /** Vrije materiaalvoorkeur, voor de hoofd-materiaalregel. */
   materialPreference?: string;
 }
@@ -121,7 +123,7 @@ function processActivity(
       expand: null,
       display: null,
       structured: null,
-      flags: [`⚠️ Geen werk-template voor "${activity.description}" — handmatig opbouwen`],
+      flags: [`Geen werk-template voor "${activity.description}" — handmatig opbouwen`],
       unmatched: true,
     };
   }
@@ -136,6 +138,7 @@ function processActivity(
       width_m: activity.width_m,
       afgraafdiepte_cm: activity.afgraafdiepte_cm,
       zanddikte_cm: activity.zanddikte_cm,
+      opsluiting_lengte_m: activity.opsluiting_lengte_m,
       materialPreference: activity.materialPreference,
     },
     pricingDb
@@ -161,7 +164,10 @@ function processActivity(
     day_rounding: config.day_rounding,
   });
 
-  const flags = dedupe([...expand.flags, ...structured.flags]);
+  // Specifieke per-regel vlaggen (bv. "Geen prijs gevonden voor X") ophalen
+  // zodat de gebruiker in de Let op-lijst ziet WELKE post een prijs mist.
+  const lineFlags = expand.lines.flatMap((l) => l.flags);
+  const flags = dedupe([...lineFlags, ...expand.flags, ...structured.flags]);
 
   return { activity, assembly, expand, display, structured, flags, unmatched: false };
 }

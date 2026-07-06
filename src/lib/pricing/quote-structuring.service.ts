@@ -247,7 +247,7 @@ function applyLayout(lines: StructureLine[], layout: LayoutOption): MethodLine[]
 }
 
 const MISSING_PRICE_FLAG =
-  "⚠️ Bevat een post zonder prijs — controleer handmatig vóór verzenden";
+  "Bevat een post zonder prijs — controleer handmatig vóór verzenden";
 
 /**
  * Structureert geprijsde regels tot een offerte met totalen-breakdown,

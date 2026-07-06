@@ -117,7 +117,7 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     expect(klinker!.price_source).toBe("database");
   });
 
-  it("Test 1b: oprit zonder zandinfo → twee Gouda-vlaggen", () => {
+  it("Test 1b: oprit zonder zandinfo → afgraven/zand overgeslagen, geen Gouda-vlaggen", () => {
     const result = runQuotePipeline(
       [
         {
@@ -134,9 +134,8 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     );
 
     const flags = result.flags.join(" ");
-    expect(flags).toContain("Afgraafdiepte niet opgegeven");
-    expect(flags).toContain("Zanddikte niet opgegeven");
-    expect(result.hasBlockingFlags).toBe(true);
+    expect(flags).not.toContain("Afgraafdiepte niet opgegeven");
+    expect(flags).not.toContain("Zanddikte niet opgegeven");
   });
 
   it("Test 2: herstraten → geen steenmateriaal, arbeid-dominant", () => {

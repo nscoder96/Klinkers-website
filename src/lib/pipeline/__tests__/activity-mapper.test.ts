@@ -33,11 +33,20 @@ describe("toPipelineActivity", () => {
     expect(a.zanddikte_cm).toBe(10);
   });
 
-  it("kiest materiaalvoorkeur uit genoemde materialen", () => {
+  it("kiest het eerste genoemde materiaal als voorkeur (alleen het hoofdmateriaal)", () => {
     const a = toPipelineActivity(
       activity({ materials_mentioned: ["klinkers waalformaat", "antraciet"] })
     );
-    expect(a.materialPreference).toBe("klinkers waalformaat antraciet");
+    // Alleen het eerste materiaal: kleur/uitvoering ("antraciet") niet meenemen —
+    // assembly-componenten (opsluitbanden, voegzand) worden toch al apart uitgevouwen.
+    expect(a.materialPreference).toBe("klinkers waalformaat");
+  });
+
+  it("negeert assembly-gedekte materialen (voegzand, opsluitbanden)", () => {
+    const a = toPipelineActivity(
+      activity({ materials_mentioned: ["gebakken klinkers waalformaat", "opsluitbanden", "voegzand"] })
+    );
+    expect(a.materialPreference).toBe("gebakken klinkers waalformaat");
   });
 
   it("valt terug op de omschrijving als geen materialen genoemd zijn", () => {

@@ -106,7 +106,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Database niet geconfigureerd' }, { status: 500 });
     }
 
-    const { sections, subtotal, btw_amount, total } = body;
+    // Totalen worden server-side herberekend (zie onder); client-waarden worden
+    // bewust genegeerd zodat een leeg/NaN-veld de totalen nooit op 0/null zet.
+    const { sections } = body;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
 
     // Start transaction: delete existing sections and line items
     // First get existing section IDs
@@ -131,17 +134,41 @@ export async function PUT(
       .delete()
       .eq('quote_id', quoteId);
 
-    // Create new sections with line items
+    // Create new sections with line items.
+    // Elk regeltotaal = aantal × prijs (server-side herberekend, defensief tegen
+    // NaN/lege velden). Offertetotalen worden hieruit opgeteld — nooit uit de client.
     const allLineItems: object[] = [];
+    let serverSubtotal = 0;
+    let serverBtwRaw = 0;
 
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
 
-      // Calculate section subtotal
-      const sectionSubtotal = section.line_items?.reduce(
-        (sum: number, item: { total_price: number }) => sum + (item.total_price || 0),
-        0
-      ) || 0;
+      // Herbereken elke regel defensief
+      const computed = (section.line_items || []).map((item: {
+        description: string;
+        quantity: number;
+        unit: string;
+        unit_price: number;
+        total_price?: number;
+        line_type?: string;
+        markup_percent?: number | null;
+        vat_rate?: number;
+        display_order?: number;
+        pricing_id?: string | null;
+        is_ai_calculated?: boolean;
+        calculation_breakdown?: object | null;
+      }, idx: number) => {
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        const vatRate = Number(item.vat_rate) || 21;
+        const totalPrice = round2(unitPrice * quantity);
+        return { item, idx, quantity, unitPrice, vatRate, totalPrice };
+      });
+
+      const sectionSubtotal = round2(
+        computed.reduce((sum: number, c: { totalPrice: number }) => sum + c.totalPrice, 0)
+      );
 
       // Create section
       const { data: newSection, error: sectionError } = await supabase
@@ -162,32 +189,22 @@ export async function PUT(
       }
 
       // Create line items for this section
-      if (section.line_items && section.line_items.length > 0) {
-        const lineItems = section.line_items.map((item: {
-          description: string;
-          quantity: number;
-          unit: string;
-          unit_price: number;
-          total_price: number;
-          line_type?: string;
-          markup_percent?: number | null;
-          vat_rate?: number;
-          display_order?: number;
-          pricing_id?: string | null;
-          is_ai_calculated?: boolean;
-          calculation_breakdown?: object | null;
-        }, idx: number) => ({
+      if (computed.length > 0) {
+        const lineItems = computed.map(({ item, idx, quantity, unitPrice, vatRate, totalPrice }: {
+          item: { description: string; unit: string; line_type?: string; markup_percent?: number | null; display_order?: number; pricing_id?: string | null; is_ai_calculated?: boolean; calculation_breakdown?: object | null };
+          idx: number; quantity: number; unitPrice: number; vatRate: number; totalPrice: number;
+        }) => ({
           section_id: newSection.id,
           pricing_id: item.pricing_id || null,
           description: item.description,
-          quantity: item.quantity,
+          quantity,
           unit: item.unit,
           cost_price: null,
           markup_percent: item.markup_percent || null,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
+          unit_price: unitPrice,
+          total_price: totalPrice,
           line_type: item.line_type || 'arbeid',
-          vat_rate: item.vat_rate || 21,
+          vat_rate: vatRate,
           display_order: item.display_order || idx + 1,
           is_auto_calculated: item.is_ai_calculated || false,
           formula_used: item.calculation_breakdown ? JSON.stringify(item.calculation_breakdown) : null
@@ -203,33 +220,46 @@ export async function PUT(
 
         allLineItems.push(...lineItems);
       }
+
+      serverSubtotal = round2(serverSubtotal + sectionSubtotal);
+      serverBtwRaw += computed.reduce(
+        (sum: number, c: { totalPrice: number; vatRate: number }) =>
+          sum + c.totalPrice * (c.vatRate / 100),
+        0
+      );
     }
 
-    // Update quote totals and line_items JSON
+    const serverBtw = round2(serverBtwRaw);
+    const serverTotal = round2(serverSubtotal + serverBtw);
+
+    // Update quote totals and line_items JSON — totalen server-side herberekend.
     const flatLineItems = sections.flatMap((s: { line_items?: object[] }) => s.line_items || []).map((item: {
       description: string;
       quantity: number;
       unit: string;
       unit_price: number;
-      total_price: number;
       line_type?: string;
-    }, index: number) => ({
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit,
-      unit_price: item.unit_price,
-      total: item.total_price,
-      line_type: item.line_type || 'arbeid',
-      display_order: index + 1
-    }));
+    }, index: number) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unit_price) || 0;
+      return {
+        description: item.description,
+        quantity,
+        unit: item.unit,
+        unit_price: unitPrice,
+        total: round2(unitPrice * quantity),
+        line_type: item.line_type || 'arbeid',
+        display_order: index + 1
+      };
+    });
 
     const { error: updateError } = await supabase
       .from('quotes')
       .update({
         line_items: flatLineItems,
-        subtotal: subtotal,
-        btw_amount: btw_amount,
-        total: total
+        subtotal: serverSubtotal,
+        btw_amount: serverBtw,
+        total: serverTotal
       })
       .eq('id', quoteId);
 
@@ -246,11 +276,11 @@ export async function PUT(
       new_data: {
         sections: sections.length,
         items: allLineItems.length,
-        subtotal,
-        btw_amount,
-        total
+        subtotal: serverSubtotal,
+        btw_amount: serverBtw,
+        total: serverTotal
       },
-      change_summary: `Offerte bijgewerkt: ${sections.length} secties, €${total.toFixed(2)} totaal`
+      change_summary: `Offerte bijgewerkt: ${sections.length} secties, €${serverTotal.toFixed(2)} totaal`
     });
 
     return NextResponse.json({ success: true });

@@ -61,6 +61,12 @@ export const DimensionsSchema = z.object({
     .describe(
       "Dikte van het zandbed/zandpakket in cm — ALLEEN als de stratenmaker dit expliciet noteert. NOOIT gokken of verzinnen."
     ),
+  opsluiting_lengte_m: z
+    .number()
+    .optional()
+    .describe(
+      "Berekende totale lengte opsluitbanden in strekkende meters. Alleen invullen als de notitie aangeeft welke zijdes opsluiting krijgen. Zie berekeningsregels in de prompt."
+    ),
 });
 
 /**
@@ -80,6 +86,12 @@ export const ActivitySchema = z.object({
   materials_mentioned: z
     .array(z.string())
     .describe("Materials explicitly mentioned in the source text"),
+  missing_dimensions: z
+    .boolean()
+    .optional()
+    .describe(
+      "true als er GEEN lengte/breedte beschikbaar zijn voor dit bestratings-, pad-, terras- of opritonderdeel. false of weggelaten als afmetingen wel aanwezig zijn."
+    ),
 });
 
 /**

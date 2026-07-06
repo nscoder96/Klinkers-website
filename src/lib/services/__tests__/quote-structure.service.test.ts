@@ -38,7 +38,7 @@ describe("structureQuote", () => {
     ]);
 
     const activityMap = {
-      "act-terras": { description: "Terras 20m2", type: "bestrating" as const, action: "nieuw", dimensions: {} },
+      "act-terras": { description: "Terras", type: "bestrating" as const, action: "nieuw", dimensions: { area: 20 } },
       "act-grond": { description: "Uitgraven tuin", type: "grondwerk" as const, action: "nieuw", dimensions: {} },
     };
 
@@ -47,9 +47,9 @@ describe("structureQuote", () => {
     expect(result.categories).toHaveLength(2);
     // grondwerk comes before bestrating in standard order
     expect(result.categories[0].category).toBe("grondwerk");
-    expect(result.categories[0].element_title).toBe("Uitgraven tuin");
+    expect(result.categories[0].element_title).toBe("Uitgraven tuin [AFMETINGEN ONTBREKEN]");
     expect(result.categories[1].category).toBe("bestrating");
-    expect(result.categories[1].element_title).toBe("Terras 20m2");
+    expect(result.categories[1].element_title).toBe("Terras 20 m²");
     // Both bestrating items are in the same element section
     expect(result.categories[1].arbeid_items).toHaveLength(2);
   });

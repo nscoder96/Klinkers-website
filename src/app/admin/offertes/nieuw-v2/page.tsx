@@ -2,20 +2,20 @@
 
 /**
  * Offerte-generator V2 (F8) — 3-stappen flow, tablet-proof.
- *   Stap 1: Opdracht invoeren (vrije tekst + klantgegevens)
- *   Stap 2: Analyse reviewen (onderdelen + Gouda-vlaggen)
- *   Stap 3: Offerte finaliseren (regels + sticky sidebar met live totalen +
- *           sanity-check banner)
- *
- * Praat met /api/admin/quote/generate-v2 (analyze → pipeline). De zware logica
- * zit in de pure pipeline-services; deze pagina is presentatie + flow.
+ *   Stap 1: Opdracht invoeren
+ *   Stap 2: Analyse reviewen (onderdelen + vlaggen)
+ *   Stap 3: Offerte finaliseren — bewerkbare regels, drag & drop, BTW-toggle
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Save } from 'lucide-react';
+import { SectionDndList } from './SectionDndList';
+import type { EditableLine, EditableSection } from './types';
+
+// --- API response types ---
 
 interface DisplayLine {
   description: string;
@@ -52,6 +52,7 @@ interface Activity {
   action: string;
   description: string;
   dimensions: { area?: number; length?: number; width?: number };
+  missing_dimensions?: boolean;
 }
 interface PipelineResponse {
   ai: { summary: string; confidence: number; activities: Activity[] };
@@ -64,6 +65,8 @@ interface PipelineResponse {
   };
 }
 
+// --- Helpers ---
+
 const euro = (cents: number | null) =>
   cents == null
     ? '—'
@@ -72,18 +75,74 @@ const euro = (cents: number | null) =>
         maximumFractionDigits: 2,
       })}`;
 
+function lineTotal(l: EditableLine): number | null {
+  if (l.unit_price_cents == null) return null;
+  return Math.round(l.unit_price_cents * l.quantity);
+}
+
+// Simple incrementing ID — deterministic, SSR-safe
+let _idCounter = 0;
+const nextId = () => `eid-${++_idCounter}`;
+
+const EMPTY_LINE = (): EditableLine => ({
+  id: nextId(),
+  description: '',
+  line_type: 'arbeid',
+  quantity: 1,
+  unit: 'st',
+  unit_price_cents: null,
+});
+
+const PLACEHOLDER_LINE = (): EditableLine => ({
+  id: nextId(),
+  description: 'Vul aan',
+  line_type: 'arbeid',
+  quantity: 1,
+  unit: 'st',
+  unit_price_cents: null,
+});
+
+function toEditableSections(sections: Section[]): EditableSection[] {
+  return sections.map((s) => ({
+    id: nextId(),
+    title: s.title,
+    flags: s.flags,
+    unmatched: s.unmatched,
+    lines:
+      s.display_lines.length > 0
+        ? s.display_lines.map((l) => ({
+            id: nextId(),
+            description: l.description,
+            line_type: l.line_type,
+            quantity: l.quantity,
+            unit: l.unit,
+            unit_price_cents: l.unit_price_cents,
+          }))
+        : s.unmatched
+          ? [PLACEHOLDER_LINE()]
+          : [],
+  }));
+}
+
+// --- Page ---
+
 export default function NieuwV2Page() {
   const { isLoading: authLoading } = useAdminAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [notes, setNotes] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [method, setMethod] = useState('uitgesplitst');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PipelineResponse | null>(null);
+  const [editableSections, setEditableSections] = useState<EditableSection[]>([]);
   const [savedNumber, setSavedNumber] = useState<string | null>(null);
+  const [savedQuoteId, setSavedQuoteId] = useState<string | null>(null);
+  const [showIncl, setShowIncl] = useState(false);
 
   const analyze = async () => {
     setLoading(true);
@@ -97,6 +156,7 @@ export default function NieuwV2Page() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Analyse mislukt');
       setResult(data);
+      setEditableSections(toEditableSections(data.pipeline.sections));
       setStep(2);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Er ging iets mis');
@@ -118,17 +178,94 @@ export default function NieuwV2Page() {
           persist: true,
           projectDescription: customerName ? `Offerte voor ${customerName}` : undefined,
           projectAddress: customerAddress,
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerAddress,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Opslaan mislukt');
       setSavedNumber(data.persistence?.quoteNumber ?? 'opgeslagen');
+      setSavedQuoteId(data.persistence?.quoteId ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
   };
+
+  const updateLine = useCallback(
+    (si: number, li: number, patch: Partial<EditableLine>) => {
+      setEditableSections((prev) =>
+        prev.map((section, s) =>
+          s !== si
+            ? section
+            : {
+                ...section,
+                lines: section.lines.map((line, l) =>
+                  l !== li ? line : { ...line, ...patch }
+                ),
+              }
+        )
+      );
+    },
+    []
+  );
+
+  const addLine = useCallback((si: number) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) =>
+        s !== si
+          ? section
+          : { ...section, lines: [...section.lines, EMPTY_LINE()] }
+      )
+    );
+  }, []);
+
+  const reorderLines = useCallback((si: number, newLines: EditableLine[]) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) => (s !== si ? section : { ...section, lines: newLines }))
+    );
+  }, []);
+
+  const deleteLine = useCallback((si: number, li: number) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) =>
+        s !== si
+          ? section
+          : { ...section, lines: section.lines.filter((_, l) => l !== li) }
+      )
+    );
+  }, []);
+
+  const deleteSection = useCallback((si: number) => {
+    setEditableSections((prev) => prev.filter((_, s) => s !== si));
+  }, []);
+
+  const reorderSections = useCallback((newSections: EditableSection[]) => {
+    setEditableSections(newSections);
+  }, []);
+
+  // Live totals — always computed excl. BTW
+  const liveTotals = (() => {
+    let subtotal = 0;
+    let labor = 0;
+    let material = 0;
+    for (const s of editableSections) {
+      for (const l of s.lines) {
+        const tot = lineTotal(l) ?? 0;
+        subtotal += tot;
+        if (l.line_type === 'arbeid') labor += tot;
+        else if (l.line_type === 'materiaal') material += tot;
+      }
+    }
+    const vat21 = Math.round(subtotal * 0.21);
+    const grand = subtotal + vat21;
+    const laborPct = subtotal > 0 ? Math.round((labor / subtotal) * 100) : 0;
+    const materialPct = subtotal > 0 ? Math.round((material / subtotal) * 100) : 0;
+    return { subtotal, vat21, grand, laborPct, materialPct };
+  })();
 
   if (authLoading) {
     return (
@@ -174,6 +311,18 @@ export default function NieuwV2Page() {
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
               />
+              <input
+                className="rounded-md border border-slate-300 p-2 text-sm"
+                placeholder="Telefoon (optioneel)"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-slate-300 p-2 text-sm"
+                placeholder="E-mail (optioneel)"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+              />
             </div>
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-600">Prijsmethode:</label>
@@ -182,7 +331,7 @@ export default function NieuwV2Page() {
                 onChange={(e) => setMethod(e.target.value)}
                 className="rounded-md border border-slate-300 p-2 text-sm"
               >
-                <option value="uitgesplitst">Uitgesplitst</option>
+                <option value="uitgesplitst">Uitgesplitst — elke post apart</option>
                 <option value="meterprijs">Meterprijs / aanneemsom</option>
                 <option value="uren">Uren × uurtarief</option>
               </select>
@@ -204,6 +353,9 @@ export default function NieuwV2Page() {
 
             {result.pipeline.flags.length > 0 && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                  Let op bij de offerte
+                </p>
                 {result.pipeline.flags.map((f, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm text-amber-900">
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -230,6 +382,22 @@ export default function NieuwV2Page() {
               ))}
             </div>
 
+            {(() => {
+              const missing = result.ai.activities.filter((a) => a.missing_dimensions);
+              if (missing.length === 0) return null;
+              return (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    Afmetingen ontbreken voor: {missing.map((a) => a.description).join(', ')}
+                  </p>
+                  <p className="mt-1 text-xs text-red-700">
+                    Voeg lengte × breedte toe aan de schouwnotitie en analyseer opnieuw voor een correcte offerte.
+                  </p>
+                </div>
+              );
+            })()}
+
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Terug
@@ -244,8 +412,14 @@ export default function NieuwV2Page() {
         {/* STAP 3 */}
         {step === 3 && result && combined && (
           <div className="flex flex-col gap-6 lg:flex-row">
+            {/* Main content */}
             <div className="flex-1 space-y-4">
-              <h2 className="text-lg font-semibold text-slate-900">Stap 3 · Offerte finaliseren</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Stap 3 · Offerte finaliseren</h2>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Sleep secties en regels om te herschikken. Klik op een veld om het aan te passen.
+                </p>
+              </div>
 
               {!combined.distribution.within_norm && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
@@ -260,35 +434,16 @@ export default function NieuwV2Page() {
                 </div>
               )}
 
-              {result.pipeline.sections.map((s, i) => (
-                <div key={i} className="rounded-lg border border-slate-200 bg-white">
-                  <div className="border-b border-slate-100 px-4 py-2 font-medium text-slate-900">
-                    {s.title}
-                    {s.unmatched && (
-                      <span className="ml-2 text-xs text-amber-600">⚠️ handmatig opbouwen</span>
-                    )}
-                  </div>
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {s.display_lines.map((l, j) => (
-                        <tr key={j} className="border-b border-slate-50">
-                          <td className="px-4 py-1.5 text-slate-700">{l.description}</td>
-                          <td className="px-2 py-1.5 text-right text-slate-500">
-                            {l.quantity} {l.unit}
-                          </td>
-                          <td
-                            className={`px-4 py-1.5 text-right ${
-                              l.total_cents == null ? 'text-red-600' : 'text-slate-900'
-                            }`}
-                          >
-                            {l.total_cents == null ? 'prijs ontbreekt' : euro(l.total_cents)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
+              <SectionDndList
+                sections={editableSections}
+                showIncl={showIncl}
+                onUpdateLine={updateLine}
+                onAddLine={addLine}
+                onDeleteLine={deleteLine}
+                onDeleteSection={deleteSection}
+                onReorderLines={reorderLines}
+                onReorderSections={reorderSections}
+              />
 
               <div className="flex justify-between">
                 <Button variant="outline" onClick={() => setStep(2)}>
@@ -301,35 +456,92 @@ export default function NieuwV2Page() {
             <aside className="lg:w-72">
               <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 lg:sticky lg:top-4">
                 <h3 className="font-semibold text-slate-900">Totalen</h3>
-                <Row label="Subtotaal" value={euro(combined.breakdown.subtotal)} />
-                <Row label="BTW 21%" value={euro(combined.breakdown.vat_21_amount)} />
-                {combined.breakdown.vat_9_amount > 0 && (
-                  <Row label="BTW 9%" value={euro(combined.breakdown.vat_9_amount)} />
-                )}
-                <div className="border-t border-slate-200 pt-2">
-                  <Row label="Totaal" value={euro(combined.breakdown.grand_total)} bold />
+
+                {/* BTW toggle */}
+                <div className="flex overflow-hidden rounded border border-slate-200 text-xs font-medium">
+                  <button
+                    onClick={() => setShowIncl(false)}
+                    className={`flex-1 py-1.5 transition-colors ${
+                      !showIncl
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    Excl. BTW
+                  </button>
+                  <button
+                    onClick={() => setShowIncl(true)}
+                    className={`flex-1 py-1.5 transition-colors ${
+                      showIncl
+                        ? 'bg-orange-500 text-white'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    Incl. BTW
+                  </button>
                 </div>
-                <div className="pt-2 text-xs text-slate-500">
-                  Arbeid {combined.distribution.labor_pct}% · Materiaal{' '}
-                  {combined.distribution.materials_pct}% · Materieel{' '}
-                  {combined.distribution.equipment_pct}%
+
+                {/* Totalen display */}
+                {showIncl ? (
+                  <>
+                    <div className="rounded-md bg-orange-50 p-3 text-center">
+                      <div className="text-xl font-bold text-slate-900">
+                        {euro(liveTotals.grand)}
+                      </div>
+                      <div className="text-xs text-slate-500">Totaal incl. BTW</div>
+                    </div>
+                    <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                      <Row label="Subtotaal excl. BTW" value={euro(liveTotals.subtotal)} />
+                      <Row label="BTW 21%" value={euro(liveTotals.vat21)} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Row label="Subtotaal excl. BTW" value={euro(liveTotals.subtotal)} />
+                    <Row label="BTW 21%" value={euro(liveTotals.vat21)} />
+                    <div className="border-t border-slate-200 pt-2">
+                      <Row label="Totaal incl. BTW" value={euro(liveTotals.grand)} bold />
+                    </div>
+                  </>
+                )}
+
+                <div className="pt-1 text-xs text-slate-400">
+                  Arbeid {liveTotals.laborPct}% · Materiaal {liveTotals.materialPct}%
                 </div>
 
                 {result.pipeline.hasBlockingFlags && (
                   <p className="rounded bg-amber-50 p-2 text-xs text-amber-800">
-                    Niet verstuurbaar zolang er vlaggen openstaan.
+                    Controleer de vlaggen in stap 2 vóór verzenden.
                   </p>
                 )}
 
                 {savedNumber ? (
-                  <p className="rounded bg-green-50 p-2 text-sm text-green-800">
-                    Opgeslagen als concept {savedNumber}.
-                  </p>
+                  <div className="space-y-2">
+                    <p className="rounded bg-green-50 p-2 text-sm text-green-800">
+                      Opgeslagen als concept {savedNumber}.
+                    </p>
+                    {savedQuoteId && (
+                      <Button asChild className="w-full">
+                        <a href={`/admin/offertes/${savedQuoteId}`}>
+                          Offerte openen en versturen
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 ) : (
-                  <Button className="w-full" onClick={persist} disabled={saving}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Opslaan als concept
-                  </Button>
+                  <>
+                    <Button className="w-full" onClick={persist} disabled={saving}>
+                      {saving ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Opslaan als concept
+                    </Button>
+                    <p className="text-center text-xs text-slate-400">
+                      Na opslaan kun je de offerte versturen.
+                    </p>
+                  </>
                 )}
               </div>
             </aside>
@@ -339,6 +551,8 @@ export default function NieuwV2Page() {
     </AdminLayout>
   );
 }
+
+// --- Stepper ---
 
 function Stepper({ step }: { step: number }) {
   const labels = ['Invoer', 'Analyse', 'Finaliseren'];
@@ -361,7 +575,9 @@ function Stepper({ step }: { step: number }) {
             >
               {n}
             </span>
-            <span className={`text-sm ${active ? 'font-medium text-slate-900' : 'text-slate-500'}`}>
+            <span
+              className={`text-sm ${active ? 'font-medium text-slate-900' : 'text-slate-500'}`}
+            >
               {label}
             </span>
             {n < 3 && <span className="mx-1 h-px w-6 bg-slate-200" />}
@@ -371,6 +587,8 @@ function Stepper({ step }: { step: number }) {
     </div>
   );
 }
+
+// --- Row (sidebar) ---
 
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (

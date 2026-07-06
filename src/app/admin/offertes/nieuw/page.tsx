@@ -108,6 +108,7 @@ export default function NieuweOfferte() {
   const [patroon, setPatroon] = useState<'recht' | 'halfsteens' | 'visgraat' | 'rond'>('recht');
   const [grondtype, setGrondtype] = useState<'zand' | 'klei' | 'veen'>('zand');
   const [bereikbaarheid, setBereikbaarheid] = useState<'goed' | 'matig' | 'slecht'>('goed');
+  const [afvoer, setAfvoer] = useState<'nee' | 'container' | 'handmatig'>('nee');
   const [uurprijs, setUurprijs] = useState(55);
 
   // Steps: 'input' | 'analyzing' | 'editor'
@@ -637,7 +638,7 @@ export default function NieuweOfferte() {
                 {/* Schouwcontext */}
                 <div className="mt-4 pt-4 border-t border-slate-100">
                   <p className="text-xs font-medium text-slate-500 uppercase mb-3">Schouwcontext</p>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
                     <div className="space-y-1">
                       <label className="text-xs text-slate-500">Patroon</label>
                       <select
@@ -675,7 +676,25 @@ export default function NieuweOfferte() {
                         <option value="slecht">Slecht (+35%)</option>
                       </select>
                     </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">Afvoer puin</label>
+                      <select
+                        className="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={afvoer}
+                        onChange={e => setAfvoer(e.target.value as typeof afvoer)}
+                      >
+                        <option value="nee">Geen afvoer</option>
+                        <option value="handmatig">Handmatig afvoeren</option>
+                        <option value="container">Container huren</option>
+                      </select>
+                    </div>
                   </div>
+                  {afvoer === 'container' && (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>Vergeet de puincontainer in te prijzen — check actuele prijs (momenteel ~€159 incl. btw). Verwerk dit als losse post in de offerte.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">

@@ -45,6 +45,12 @@ export interface AssemblyInput {
   afgraafdiepte_cm?: number;
   zanddikte_cm?: number;
   /**
+   * Door AI berekende opsluitbandenlengte (m¹) op basis van genoemde zijdes
+   * ("links en rechts" = 2×langste zijde + 1×kortste zijde).
+   * Als aanwezig, overschrijft dit de standaard omtrekformule.
+   */
+  opsluiting_lengte_m?: number;
+  /**
    * Door de klant gekozen bestratingmateriaal (bv. "klinkers waalformaat
    * antraciet"). Wordt gebruikt om de hoofd-materiaalregel met een lege
    * `item_name_match` aan een prijs te koppelen (token-overlap).
@@ -158,10 +164,14 @@ export function expandAssembly(
 
   const depth = hasDepth ? input.afgraafdiepte_cm! : 0;
   const zand = hasZand ? input.zanddikte_cm! : MIN_ZANDDIKTE_CM;
+  // Gebruik AI-berekende opsluitbandenlengte als die beschikbaar is;
+  // anders standaard omtrekformule (exact als L×B bekend, anders schatting).
   const perimeter =
-    input.length_m && input.width_m
-      ? (input.length_m + input.width_m) * 2
-      : Math.sqrt(area) * 4;
+    input.opsluiting_lengte_m != null && input.opsluiting_lengte_m > 0
+      ? input.opsluiting_lengte_m
+      : input.length_m && input.width_m
+        ? (input.length_m + input.width_m) * 2
+        : Math.sqrt(area) * 4;
   const cunet = (area * depth) / 100;
 
   const vars: AssemblyVars = {
@@ -175,24 +185,7 @@ export function expandAssembly(
     cunet_m3: cunet,
   };
 
-  // Gouda-vlaggen alleen als de assembly de variabele daadwerkelijk gebruikt:
-  // herstraten kent geen afgraaf-/zandcomponent en mag dus niet vlaggen.
-  const usesDepth = components.some(
-    (c) =>
-      c.quantity_formula?.includes("afgraafdiepte_cm") ||
-      c.quantity_formula?.includes("cunet_m3")
-  );
-  const usesZand = components.some((c) =>
-    c.quantity_formula?.includes("zanddikte_cm")
-  );
-
   const quoteFlags: string[] = [];
-  if (usesDepth && !hasDepth) {
-    quoteFlags.push("⚠️ Afgraafdiepte niet opgegeven — controleer voor berekening");
-  }
-  if (usesZand && !hasZand) {
-    quoteFlags.push("⚠️ Zanddikte niet opgegeven — minimaal 8 cm, controleer");
-  }
 
   const lines: ExpandedLine[] = [];
 
@@ -202,24 +195,29 @@ export function expandAssembly(
       (c.quantity_formula.includes("afgraafdiepte_cm") ||
         c.quantity_formula.includes("cunet_m3"));
 
-    // Optionele dieptegebonden regels overslaan als diepte ontbreekt
-    // (de offerte-brede vlag dekt dit af).
+    // Afgraven overslaan als afgraafdiepte niet is opgegeven.
+    const isAfgraafComponent =
+      c.item_name_match?.toLowerCase().includes("afgraven") ?? false;
+    if (isAfgraafComponent && !hasDepth) {
+      continue;
+    }
+
+    // Optionele dieptegebonden regels overslaan als diepte ontbreekt.
     if (c.is_optional && dependsOnDepth && !hasDepth) {
+      continue;
+    }
+
+    // Zand overslaan als zanddikte niet is opgegeven — geen zand vermeld = geen zand.
+    const isZandComponent = c.quantity_formula?.includes("zanddikte_cm") ?? false;
+    if (isZandComponent && !hasZand) {
       continue;
     }
 
     const quantityRaw = c.quantity_formula
       ? evaluateAssemblyFormula(c.quantity_formula, vars)
       : area * (c.quantity_per_unit ?? 1);
-    const quantity = Math.round(quantityRaw * 1000) / 1000;
 
     const lineFlags: string[] = [];
-    if (c.flag_when_missing) {
-      if (dependsOnDepth && !hasDepth) lineFlags.push(c.flag_when_missing);
-      else if (c.quantity_formula?.includes("zanddikte_cm") && !hasZand) {
-        lineFlags.push(c.flag_when_missing);
-      }
-    }
 
     // Prijs opzoeken (geen match-naam = handmatige keuze nodig).
     // Een lege match op de hoofd-materiaalregel (oppervlakteformule, niet de
@@ -236,6 +234,14 @@ export function expandAssembly(
       pricing = matchMaterialPreference(input.materialPreference, pricingDb);
       if (pricing) resolvedName = input.materialPreference;
     }
+
+    // Hoeveelheid afronden: m³ (bulk/zand) altijd naar boven op halve kuip,
+    // overige eenheden op 3 decimalen.
+    const resolvedUnit = pricing?.unit ?? "m²";
+    const quantity =
+      resolvedUnit === "m3"
+        ? Math.ceil(quantityRaw * 2) / 2
+        : Math.round(quantityRaw * 1000) / 1000;
 
     let unitPriceCents: Cents | null = null;
     let totalCents: Cents | null = null;
@@ -255,8 +261,8 @@ export function expandAssembly(
     if (priceSource === "missing") {
       lineFlags.push(
         resolvedName
-          ? `⚠️ Geen prijs gevonden voor "${resolvedName}" — vul handmatig in`
-          : "⚠️ Materiaalkeuze/prijs handmatig invullen"
+          ? `Geen prijs gevonden voor "${resolvedName}" — vul handmatig in`
+          : "Materiaalkeuze/prijs handmatig invullen"
       );
     }
 
@@ -264,7 +270,7 @@ export function expandAssembly(
       description: resolvedName ?? "(handmatig in te vullen)",
       line_type: c.component_type,
       quantity,
-      unit: pricing?.unit ?? "m²",
+      unit: resolvedUnit,
       unit_price_cents: unitPriceCents,
       total_cents: totalCents,
       pricing_id: pricingId,

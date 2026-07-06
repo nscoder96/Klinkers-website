@@ -184,7 +184,7 @@ interface Quote {
   created_at: string;
   decline_reason: string | null;
   accept_token: string | null;
-  leads: Lead;
+  leads: Lead | null;
   // Deddo-style new fields
   version: number;
   work_description: string | null;
@@ -552,7 +552,7 @@ export default function QuoteDetailPage() {
       const data = await response.json();
 
       if (response.ok) {
-        alert(`Email verstuurd naar ${quote.leads.email}`);
+        alert(`Email verstuurd naar ${quote.leads?.email}`);
         setShowEmailModal(false);
         setEmailMessage('');
         await fetchQuote();
@@ -573,11 +573,11 @@ export default function QuoteDetailPage() {
     showModal(
       <EditCustomerDetailsForm
         customer={{
-          name: quote.leads.name,
-          email: quote.leads.email,
-          phone: quote.leads.phone,
-          address: quote.leads.address,
-          city: quote.leads.city,
+          name: quote.leads?.name ?? '',
+          email: quote.leads?.email ?? null,
+          phone: quote.leads?.phone ?? null,
+          address: quote.leads?.address ?? null,
+          city: quote.leads?.city ?? '',
         }}
         onSave={async (updatedCustomer) => {
           const response = await fetch(`/api/admin/leads/${quote.lead_id}`, {
@@ -1147,11 +1147,11 @@ export default function QuoteDetailPage() {
                       style={{ backgroundColor: colors.stone }}
                       onClick={openEditCustomerModal}
                     >
-                      <p className="font-semibold" style={{ color: colors.dark }}>{quote.leads.name}</p>
+                      <p className="font-semibold" style={{ color: colors.dark }}>{quote.leads?.name || 'Geen klant gekoppeld'}</p>
                       <p className="text-xs" style={{ color: colors.slate }}>
-                        {quote.project_address || quote.leads.address || quote.leads.city}<br/>
-                        {quote.leads.phone && <>Tel: {quote.leads.phone}<br/></>}
-                        {quote.leads.email}
+                        {quote.project_address || quote.leads?.address || quote.leads?.city}<br/>
+                        {quote.leads?.phone && <>Tel: {quote.leads?.phone}<br/></>}
+                        {quote.leads?.email}
                       </p>
                     </div>
                   </div>
@@ -1592,41 +1592,41 @@ export default function QuoteDetailPage() {
                   className="cursor-pointer hover:bg-gray-50 -mx-4 px-4 py-2 rounded transition-colors"
                   onClick={openEditCustomerModal}
                 >
-                  <p className="font-semibold text-lg">{quote.leads.name}</p>
-                  {quote.leads.city && (
-                    <p className="text-sm text-gray-500">{quote.leads.city}</p>
+                  <p className="font-semibold text-lg">{quote.leads?.name || 'Geen klant gekoppeld'}</p>
+                  {quote.leads?.city && (
+                    <p className="text-sm text-gray-500">{quote.leads?.city}</p>
                   )}
                 </div>
 
-                {quote.leads.address && (
+                {quote.leads?.address && (
                   <div className="flex items-start gap-2">
                     <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <span className="text-gray-600">{quote.leads.address}</span>
+                    <span className="text-gray-600">{quote.leads?.address}</span>
                   </div>
                 )}
 
-                {quote.leads.phone && (
+                {quote.leads?.phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-gray-400" />
                     <a
-                      href={`tel:${quote.leads.phone}`}
+                      href={`tel:${quote.leads?.phone}`}
                       className="text-blue-600 hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {quote.leads.phone}
+                      {quote.leads?.phone}
                     </a>
                   </div>
                 )}
 
-                {quote.leads.email && (
+                {quote.leads?.email && (
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-gray-400" />
                     <a
-                      href={`mailto:${quote.leads.email}`}
+                      href={`mailto:${quote.leads?.email}`}
                       className="text-blue-600 hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {quote.leads.email}
+                      {quote.leads?.email}
                     </a>
                   </div>
                 )}
@@ -1697,8 +1697,8 @@ export default function QuoteDetailPage() {
                   Offerte bewerken
                 </Button>
 
-                {quote.leads.phone && (
-                  <a href={`https://wa.me/${quote.leads.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer">
+                {quote.leads?.phone && (
+                  <a href={`https://wa.me/${quote.leads?.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer">
                     <Button
                       variant="outline"
                       className="w-full justify-start hover:opacity-90"
@@ -1710,8 +1710,8 @@ export default function QuoteDetailPage() {
                   </a>
                 )}
 
-                {quote.leads.email && (
-                  <a href={`mailto:${quote.leads.email}?subject=Offerte ${quote.quote_number}&body=Beste ${quote.leads.name},%0A%0AHierbij stuur ik u de offerte voor uw tuinproject.%0A%0AMet vriendelijke groet,%0ANiek Klinkers%0AKlinkers %26 Co`}>
+                {quote.leads?.email && (
+                  <a href={`mailto:${quote.leads?.email}?subject=Offerte ${quote.quote_number}&body=Beste ${quote.leads?.name},%0A%0AHierbij stuur ik u de offerte voor uw tuinproject.%0A%0AMet vriendelijke groet,%0ANiek Klinkers%0AKlinkers %26 Co`}>
                     <Button
                       variant="outline"
                       className="w-full justify-start"

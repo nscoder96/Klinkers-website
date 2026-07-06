@@ -54,6 +54,23 @@ const CATEGORY_LABELS: Record<WorkCategory, string> = {
 };
 
 /**
+ * Formats a dimension suffix for section titles.
+ * "5×3 m (15 m²)" | "28 m²" | "[AFMETINGEN ONTBREKEN]"
+ */
+function formatDimensionSuffix(
+  dimensions: ActivityMetadata["dimensions"]
+): string {
+  const { length, width, area } = dimensions;
+  if (length != null && width != null) {
+    const computed = Math.round(length * width * 10) / 10;
+    const a = area ?? computed;
+    return ` ${length}×${width} m (${a} m²)`;
+  }
+  if (area != null) return ` ${area} m²`;
+  return " [AFMETINGEN ONTBREKEN]";
+}
+
+/**
  * Converts a PricedItem to a StructuredLineItem for display.
  */
 function toLineItem(item: PricedItem): StructuredLineItem {
@@ -111,7 +128,9 @@ export function structureQuote(
   for (const [key, items] of elementMap.entries()) {
     const metadata = key !== "__overig__" ? activityMap[key] : undefined;
     const category: WorkCategory = metadata?.type ?? (items[0]?.category as WorkCategory) ?? "overig";
-    const elementTitle = metadata?.description ?? CATEGORY_LABELS[category];
+    const elementTitle = metadata
+      ? metadata.description + formatDimensionSuffix(metadata.dimensions)
+      : CATEGORY_LABELS[category];
 
     const arbeidItems = items
       .filter((i) => i.line_type === "arbeid")

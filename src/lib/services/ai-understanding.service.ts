@@ -99,6 +99,22 @@ Extraheer alle genoemde afmetingen:
 
 Als je afmetingen kunt afleiden (bijv. 5x3m = 15m2), geef dan beide.
 
+## Opsluitbanden — zijdeberekening (KRITIEK)
+Als de notitie aangeeft welke zijdes opsluitbanden krijgen, bereken dan opsluiting_lengte_m:
+- "links en rechts" → 2 × (langste zijde) + 1 × (kortste zijde)
+  Voorbeeld: oprit 6×12 m, "links en rechts" → 2×12 + 6 = 30 m
+- "rondom" of geen vermelding → laat opsluiting_lengte_m WEG (systeem gebruikt omtrek als standaard)
+- "links, rechts en voorkant" → 2 × (langste zijde) + 2 × (kortste zijde) = volledige omtrek
+- Gebruik altijd de LANGSTE zijde voor de twee parallelle kanten en de KORTSTE voor de kopse kant(en).
+- Sla opsluiting_lengte_m op bij de bijbehorende bestratingsactiviteit.
+
+## VERPLICHTE AFMETINGEN (KRITIEK)
+Voor elk bestratings-, pad-, terras-, oprit- of grondwerkonderdeel zijn afmetingen VERPLICHT.
+- Afmetingen WEL aanwezig in de notitie → extraheer ze EN zet missing_dimensions: false
+- Afmetingen NIET aanwezig voor dit onderdeel → zet missing_dimensions: true
+GOK of VERZIN NOOIT afmetingen. Als ze er niet staan, is missing_dimensions: true.
+Dit geldt voor alle activiteiten — ook erfafscheidingen, vlonders en gazon.
+
 ## Stratenmaker-terminologie (KEN deze termen)
 Dit is een stratenmakersbedrijf. Herken en gebruik deze vaktermen:
 - **Constructie/grondwerk:** cunet, afgraven, menggranulaat, straatzand, zandbed, zandpakket, afreien, verdichten, aantrillen, afschot
@@ -115,14 +131,24 @@ Maak NOOIT losse activiteiten van deze onderdelen — ze horen bij het bestratin
 en worden automatisch toegevoegd door het systeem:
 - afgraven / cunet / grondwerk vooraf
 - zandbed / straatzand aanbrengen
-- opsluitbanden / trottoirbanden stellen
+- opsluitbanden / trottoirbanden stellen, herstellen of repareren
 - aantrillen, invegen, voegen, afreien, afschot
+
+## KRITIEK — Context koppelen (wat hoort bij wat)
+Als een notitie meerdere werkzaamheden beschrijft, koppel elk onderdeel aan het
+juiste tuinelement. Gebruik de context om te bepalen wat bij wat hoort:
+- "Terras achtertuin 5×4m herstraten. Opsluitbanden rondom herstellen."
+  → dit zijn TWEE regels over HETZELFDE terras achtertuin.
+  → maak ÉÉN activiteit: type=bestrating, action=herstraten, area=20m², beschrijving=terras achtertuin
+  → opsluitbanden zijn onderdeel van die activiteit, GEEN aparte activiteit
+- "Oprit nieuw aanleggen 6×12m. Terras 5×4m herstraten."
+  → dit zijn TWO APARTE oppervlakken → twee activiteiten
 
 Voeg in plaats van losse activiteiten de relevante maten toe aan de
 bestratingsactiviteit zélf:
-- "afgraven 20cm" → zet \`afgraafdiepte_cm: 20\` op de bestratingsactiviteit (GEEN aparte grondwerk-activiteit)
-- "zandbed 10cm" → zet \`zanddikte_cm: 10\` op de bestratingsactiviteit
-- "opsluitbanden rondom" → GEEN aparte activiteit (zit al in de bestrating)
+- "afgraven 20cm" → zet afgraafdiepte_cm: 20 op de bestratingsactiviteit (GEEN aparte grondwerk-activiteit)
+- "zandbed 10cm" of "ophogen 15cm" → zet zanddikte_cm: 10 (of 15) op de bestratingsactiviteit
+- "opsluitbanden rondom" of "opsluitbanden herstellen" → GEEN aparte activiteit (zit al in de bestrating)
 
 Maak ALLEEN een aparte activiteit bij:
 - een fysiek ander oppervlak/onderdeel (bv. losse oprit én los terras)

@@ -140,8 +140,8 @@ describe('Price Guardrails - Schema Structural Tests (AI-06)', () => {
   });
 
   describe('Schema Allowed Fields (sanity check)', () => {
-    test('ActivitySchema allows ONLY these fields: type, action, description, dimensions, source_text, materials_mentioned', () => {
-      const allowedFields = ['type', 'action', 'description', 'dimensions', 'source_text', 'materials_mentioned'];
+    test('ActivitySchema allows ONLY these fields: type, action, description, dimensions, source_text, materials_mentioned, missing_dimensions', () => {
+      const allowedFields = ['type', 'action', 'description', 'dimensions', 'source_text', 'materials_mentioned', 'missing_dimensions'];
       const shapeKeys = Object.keys(ActivitySchema.shape);
 
       expect(shapeKeys.sort()).toEqual(allowedFields.sort());

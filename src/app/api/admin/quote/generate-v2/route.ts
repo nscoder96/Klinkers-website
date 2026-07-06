@@ -9,6 +9,7 @@
  */
 
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { analyzeNotes } from "@/lib/services/ai-understanding.service";
 import { toPipelineActivities } from "@/lib/pipeline/activity-mapper";
 import { loadActiveAssemblies } from "@/lib/assembly/assembly-loader";
@@ -25,10 +26,35 @@ import type { LayoutOption } from "@/lib/pricing/quote-structuring.service";
 const VALID_METHODS: PriceMethod[] = ["uitgesplitst", "meterprijs", "uren"];
 const VALID_LAYOUTS: LayoutOption[] = ["uitgesplitst", "arbeid_totaalpost", "aanneemsom"];
 
+function formatSectionTitle(
+  description: string,
+  area_m2: number,
+  length_m: number | undefined,
+  width_m: number | undefined
+): string {
+  if (length_m != null && width_m != null) {
+    const a = Math.round(length_m * width_m * 10) / 10;
+    return `${description} ${length_m}×${width_m} m (${a} m²)`;
+  }
+  if (area_m2 > 0) return `${description} ${area_m2} m²`;
+  return `${description} [AFMETINGEN ONTBREKEN]`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { notes, method, layout, persist, projectDescription, projectAddress } = body;
+    const {
+      notes,
+      method,
+      layout,
+      persist,
+      projectDescription,
+      projectAddress,
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerAddress,
+    } = body;
 
     if (!notes || typeof notes !== "string" || notes.trim().length === 0) {
       return NextResponse.json(
@@ -87,9 +113,19 @@ export async function POST(request: Request) {
 
     let persistence = null;
     if (persist === true) {
+      // Maak — indien klantgegevens zijn ingevuld — direct een lead aan en
+      // koppel die aan de offerte, zodat de offerte altijd een klant heeft.
+      const leadId = await ensureLead(supabase, {
+        name: typeof customerName === "string" ? customerName.trim() : "",
+        phone: typeof customerPhone === "string" ? customerPhone.trim() : "",
+        email: typeof customerEmail === "string" ? customerEmail.trim() : "",
+        address: typeof customerAddress === "string" ? customerAddress.trim() : "",
+      });
+
       persistence = await persistQuote(supabase, pipeline, {
         projectDescription: projectDescription ?? aiResult.summary,
-        projectAddress,
+        projectAddress: projectAddress ?? (customerAddress || undefined),
+        leadId,
       });
     }
 
@@ -102,7 +138,12 @@ export async function POST(request: Request) {
       config,
       pipeline: {
         sections: pipeline.sections.map((s) => ({
-          title: s.activity.description,
+          title: formatSectionTitle(
+            s.activity.description,
+            s.activity.area_m2,
+            s.activity.length_m,
+            s.activity.width_m
+          ),
           assembly: s.assembly?.name ?? null,
           unmatched: s.unmatched,
           display_lines: s.display?.lines ?? [],
@@ -126,6 +167,62 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+interface LeadInput {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+}
+
+/**
+ * Zorgt dat er een lead bestaat voor de opgegeven klantgegevens en geeft de
+ * lead-id terug. Zonder naam → geen lead (geeft null). Hergebruikt een
+ * bestaande lead bij een match op e-mail of telefoon om duplicaten te voorkomen.
+ */
+async function ensureLead(
+  supabase: SupabaseClient,
+  input: LeadInput
+): Promise<string | null> {
+  if (!input.name) return null;
+
+  // Bestaande lead zoeken op e-mail of telefoon (duplicaat-preventie).
+  const orFilters = [
+    input.email ? `email.eq.${input.email}` : null,
+    input.phone ? `phone.eq.${input.phone}` : null,
+  ].filter(Boolean) as string[];
+
+  if (orFilters.length > 0) {
+    const { data: existing } = await supabase
+      .from("leads")
+      .select("id")
+      .or(orFilters.join(","))
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) return existing.id as string;
+  }
+
+  const { data: newLead, error: leadError } = await supabase
+    .from("leads")
+    .insert({
+      name: input.name,
+      phone: input.phone || null,
+      email: input.email || null,
+      address: input.address || null,
+      city: "",
+      source: "other",
+      status: "new",
+    })
+    .select("id")
+    .single();
+
+  if (leadError || !newLead) {
+    throw new Error(`Kon klant niet aanmaken: ${leadError?.message ?? "onbekend"}`);
+  }
+
+  return newLead.id as string;
 }
 
 function pickMethod(override: unknown, fromSettings: unknown): PriceMethod {

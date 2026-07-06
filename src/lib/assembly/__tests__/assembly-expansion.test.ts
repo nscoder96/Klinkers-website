@@ -70,19 +70,16 @@ describe("expandAssembly — Test 1b: zelfde oprit zonder afgraaf/zand info", ()
     pricingDb
   );
 
-  it("toont twee vlaggen (afgraafdiepte + zanddikte)", () => {
-    expect(result.flags.some((f) => f.includes("Afgraafdiepte"))).toBe(true);
-    expect(result.flags.some((f) => f.includes("Zanddikte"))).toBe(true);
+  it("geeft geen offerte-brede vlaggen (ontbrekende afgraaf/zand worden stil overgeslagen)", () => {
+    expect(result.flags).toHaveLength(0);
   });
 
   it("laat de dieptegebonden container weg", () => {
     expect(result.lines.find((l) => l.description.includes("Container"))).toBeUndefined();
   });
 
-  it("gebruikt minimum 8 cm zand: 70 × 8 / 100 × 1,10 = 6,16 m³", () => {
-    const zand = result.lines.find((l) => l.description.includes("Straatzand"))!;
-    expect(zand.quantity).toBeCloseTo(6.16, 3);
-    expect(zand.flags.some((f) => f.includes("Zanddikte"))).toBe(true);
+  it("laat zand weg als zanddikte niet is opgegeven", () => {
+    expect(result.lines.find((l) => l.description.includes("Straatzand"))).toBeUndefined();
   });
 
   it("schat opsluitband uit oppervlak (sqrt) i.p.v. exacte omtrek", () => {

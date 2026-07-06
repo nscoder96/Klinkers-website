@@ -989,9 +989,9 @@ export default function QuoteEditorTable({
 
             {/* Section Content */}
             {section.isExpanded && (
-              <div>
+              <div className="overflow-x-auto">
                 {/* Table Header */}
-                <div className="grid grid-cols-[50px_1fr_80px_70px_90px_70px_60px_90px_40px] gap-2 px-4 py-2 bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
+                <div className="grid grid-cols-[50px_1fr_80px_70px_90px_70px_60px_90px_40px] gap-2 px-4 py-2 bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase min-w-[820px]">
                   <div>Type</div>
                   <div>Omschrijving</div>
                   <div className="text-right">Hoev.</div>
@@ -1010,7 +1010,7 @@ export default function QuoteEditorTable({
                   {(itemGripProps) => (
                   <div
                     id={`item-${item.id}`}
-                    className="grid grid-cols-[50px_1fr_80px_70px_90px_70px_60px_90px_40px] gap-2 px-4 py-2 border-b hover:bg-gray-50 items-center group transition-colors"
+                    className="grid grid-cols-[50px_1fr_80px_70px_90px_70px_60px_90px_40px] gap-2 px-4 py-2 border-b hover:bg-gray-50 items-center group transition-colors min-w-[820px]"
                   >
                     {/* Type */}
                     <div>
@@ -1098,7 +1098,7 @@ export default function QuoteEditorTable({
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                    <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100">
                       {/* Save to library button - only show if no pricing_id */}
                       {!item.pricing_id && (
                         <button
