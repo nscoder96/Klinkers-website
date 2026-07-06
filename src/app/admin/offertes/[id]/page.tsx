@@ -66,6 +66,7 @@ import {
 } from '@/components/forms';
 import { SectionToggle } from '@/components/quote';
 import QuoteCheckPanel, { CheckSuggestion } from '@/components/quotes/QuoteCheckPanel';
+import QuoteFlagsPanel from '@/components/quotes/QuoteFlagsPanel';
 import QuoteVersionHistory from '@/components/quotes/QuoteVersionHistory';
 
 interface PaymentScheduleItem {
@@ -556,6 +557,14 @@ export default function QuoteDetailPage() {
         setShowEmailModal(false);
         setEmailMessage('');
         await fetchQuote();
+      } else if (response.status === 422 && Array.isArray(data.blockingFlags)) {
+        // C2.1: blocking-gate — leesbaar tonen wat er blokkeert.
+        const lijst = data.blockingFlags
+          .map((f: { message: string }) => `• ${f.message}`)
+          .join('\n');
+        alert(
+          `Deze offerte kan nog niet verstuurd worden.\n\nBlokkerende vlaggen:\n${lijst}\n\nLos het probleem op en markeer de vlag als opgelost in het vlaggen-paneel.`
+        );
       } else {
         alert('Fout bij verzenden: ' + (data.error || 'Onbekende fout'));
       }
@@ -1065,6 +1074,7 @@ export default function QuoteDetailPage() {
               />
             </div>
             <div className="space-y-4 sticky top-16 self-start">
+              <QuoteFlagsPanel quoteId={quoteId} />
               <QuoteCheckPanel
                 quoteId={quoteId}
                 onApplySuggestion={applySuggestion}
@@ -1737,6 +1747,9 @@ export default function QuoteDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Pipeline-vlaggen (C2.1): zichtbaar op het verzendmoment */}
+            <QuoteFlagsPanel quoteId={quoteId} />
 
             {/* Offerte check */}
             <QuoteCheckPanel

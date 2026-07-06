@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createServerClient } from '@/lib/supabase/client';
 import { recordQuoteCorrections } from '@/lib/pipeline/quote-corrections.service';
+import { getUnresolvedBlockingFlags } from '@/lib/pipeline/flag-gate.service';
 
 // Lazy initialize Resend to avoid build-time errors
 let resend: Resend | null = null;
@@ -67,6 +68,21 @@ export async function POST(
 
     if (!quote.leads?.email) {
       return NextResponse.json({ error: 'Klant heeft geen emailadres' }, { status: 400 });
+    }
+
+    // C2.1: invariant "een offerte met blocking flags kan niet verstuurd
+    // worden" — gate vóór álle mutaties en vóór beide verzendpaden
+    // (gesimuleerd én echt). Opgeloste flags (quote_flag_resolutions)
+    // tellen niet meer mee.
+    const blockingFlags = await getUnresolvedBlockingFlags(supabase, quoteId);
+    if (blockingFlags.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Offerte heeft blokkerende vlaggen en kan niet verstuurd worden',
+          blockingFlags: blockingFlags.map((f) => ({ code: f.code, message: f.message })),
+        },
+        { status: 422 }
+      );
     }
 
     // Fetch sections
