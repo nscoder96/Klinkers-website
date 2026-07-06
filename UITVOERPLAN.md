@@ -18,7 +18,7 @@ De AI-laag genereert nooit prijzen of hoeveelheden die niet in de notities staan
 
 Maak `/api/admin/quote/generate-v2` het enige generatiepad. Integreer de uren-prijsmethode uit `hours-pricing.service.ts` als volwaardige `method: "uren"` binnen de pipeline, zodat de functionaliteit van de analyze-v2 flow (uren per werkitem, dagafronding) beschikbaar is via de pipeline-config. De v2-urenschatting per werkitem wordt input voor de arbeidregels, geen parallel systeem.
 
-Acceptatie: de UI op `/admin/offertes/nieuw` roept alleen nog `generate-v2` aan. Een testnotitie levert via beide prijsmethodes (uitgesplitst en uren) een consistente offerte met identieke hoeveelheden en flags. Verificatie: `npx vitest run` groen plus een handmatige rooktest met drie voorbeeldnotities.
+Acceptatie: de UI op `/admin/offertes/nieuw` roept alleen nog `generate-v2` aan. Een testnotitie levert via beide prijsmethodes (uitgesplitst en uren) een consistente offerte: identieke materiaalregels en flags, en totale kosten in dezelfde orde. De arbeidsregel zelf verschilt bewust qua opbouw (uren rekent via uren × tarief × dagafronding, uitgesplitst per m²) — forceer geen kunstmatige gelijkheid tussen de twee arbeidsopbouwen. Verificatie: `npx vitest run` groen plus een handmatige rooktest met drie voorbeeldnotities.
 
 ### Taak A2: Dode routes verwijderen
 
@@ -34,9 +34,9 @@ Acceptatie: geen enkele plek in de code bepaalt blocking-gedrag op basis van een
 
 ### Taak A4: ensureLead repareren
 
-In `generate-v2/route.ts`: vervang de `.or()` filterstring-constructie door twee losse `.eq()` queries (eerst e-mail, dan telefoon) zodat gebruikersinvoer nooit in een PostgREST-filterexpressie terechtkomt. Bij een match op alleen telefoon: vergelijk ook de naam (case-insensitief, getrimd); wijkt die af, maak dan een nieuwe lead aan in plaats van de offerte aan de bestaande te hangen.
+In `generate-v2/route.ts`: vervang de `.or()` filterstring-constructie door twee losse `.eq()` queries (eerst e-mail, dan telefoon) zodat gebruikersinvoer nooit in een PostgREST-filterexpressie terechtkomt. Pas op béide matchpaden (e-mail én telefoon) een naamvergelijking toe (case-insensitief, getrimd): wijkt de naam af, maak dan een nieuwe lead aan in plaats van de offerte aan de bestaande te hangen. Een gedeeld zakelijk e-mailadres met een andere contactpersoon is hetzelfde risico als een gedeeld telefoonnummer.
 
-Acceptatie: unittest met een e-mailadres dat een komma en haakjes bevat slaagt zonder filterfout; test met gedeeld telefoonnummer en afwijkende naam maakt een nieuwe lead.
+Acceptatie: unittest met een e-mailadres dat een komma en haakjes bevat slaagt zonder filterfout; tests met gedeeld telefoonnummer respectievelijk gedeeld e-mailadres en een afwijkende naam maken elk een nieuwe lead.
 
 ---
 
