@@ -13,6 +13,32 @@ function getResend() {
   return resend;
 }
 
+/**
+ * C2.3: verzending loggen in `lead_activities` — de tabel die de rest van de
+ * app gebruikt (leads-timeline, convert, appointments). De oude insert in
+ * `activity_log` faalde geruisloos: die tabel bestaat in geen enkele migratie.
+ * Niet-blokkerend (patroon B1/B3): een logfout mag verzenden nooit breken,
+ * maar is wél zichtbaar in de serverlogs.
+ */
+async function logQuoteSentActivity(
+  supabase: NonNullable<ReturnType<typeof createServerClient>>,
+  quote: { lead_id: string | null; quote_number: string; leads: { email: string } },
+  quoteId: string,
+  emailId?: string
+) {
+  if (!quote.lead_id) return; // offerte zonder lead → geen timeline om op te loggen
+  const { error } = await supabase.from('lead_activities').insert({
+    lead_id: quote.lead_id,
+    activity_type: 'quote_sent',
+    title: `Offerte ${quote.quote_number} verstuurd`,
+    description: `Offerte ${quote.quote_number} verstuurd naar ${quote.leads.email}`,
+    metadata: { quote_id: quoteId, email_id: emailId ?? null },
+  });
+  if (error) {
+    console.error('[SendEmail] Activiteit loggen mislukt:', error.message);
+  }
+}
+
 interface Section {
   id: string;
   title: string;
@@ -176,6 +202,8 @@ export async function POST(
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', quoteId);
 
+      await logQuoteSentActivity(supabase, quote, quoteId);
+
       return NextResponse.json({
         success: true,
         message: 'Email gesimuleerd (geen API key)',
@@ -214,15 +242,7 @@ export async function POST(
       })
       .eq('id', quoteId);
 
-    // Log activity
-    await supabase
-      .from('activity_log')
-      .insert({
-        lead_id: quote.lead_id,
-        activity_type: 'quote_sent',
-        description: `Offerte ${quote.quote_number} verstuurd naar ${quote.leads.email}`,
-        metadata: { quote_id: quoteId, email_id: emailData?.id }
-      });
+    await logQuoteSentActivity(supabase, quote, quoteId, emailData?.id);
 
     return NextResponse.json({
       success: true,

@@ -154,3 +154,31 @@ describe("send-email route — blocking-gate (C2.1)", () => {
     expect(db.captured.quoteUpdates[0]).toMatchObject({ status: "sent" });
   });
 });
+
+describe("send-email route — activiteit loggen (C2.3)", () => {
+  it("na verzending: één activiteit in lead_activities, niets in activity_log", async () => {
+    db.run = { id: "run-1", flags: [] };
+
+    const res = await POST(makeRequest(), { params });
+
+    expect(res.status).toBe(200);
+    const activiteiten = db.captured.inserts.filter((i) => i.table === "lead_activities");
+    expect(activiteiten).toHaveLength(1);
+    expect(activiteiten[0].payload).toMatchObject({
+      lead_id: "lead-1",
+      activity_type: "quote_sent",
+    });
+    // De oude, nooit-bestaande tabel wordt niet meer geraakt (fout 42703/42P01).
+    expect(db.captured.inserts.some((i) => i.table === "activity_log")).toBe(false);
+  });
+
+  it("offerte zonder lead → verzenden slaagt, geen activiteit-insert", async () => {
+    db.run = { id: "run-1", flags: [] };
+    db.quote = { ...db.quote, lead_id: null };
+
+    const res = await POST(makeRequest(), { params });
+
+    expect(res.status).toBe(200);
+    expect(db.captured.inserts.some((i) => i.table === "lead_activities")).toBe(false);
+  });
+});
