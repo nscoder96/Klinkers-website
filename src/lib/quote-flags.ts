@@ -25,9 +25,12 @@ export interface QuoteFlag {
 }
 
 /**
- * Vaste severity per code. Blocking = offerte mag niet verstuurd worden.
- * MISSING_DIMENSIONS en WEAK_MATERIAL_MATCH hebben nog geen emitter
- * (respectievelijk gepland en C1) maar de codes en severities liggen vast.
+ * Vaste severity per code. Blocking = offerte mag niet verstuurd worden;
+ * de send-route dwingt dit server-side af (C2.1). Elke code heeft een
+ * emitter: MISSING_DEPTH/MISSING_SAND_THICKNESS en MISSING_DIMENSIONS in de
+ * pipeline (C2.2/C2.5), WEAK_MATERIAL_MATCH en MISSING_PRICE in de
+ * assembly-expansie (C1), UNMATCHED_ACTIVITY en DISTRIBUTION_OUT_OF_NORM in
+ * pipeline/structurering, MISSING_HOURS_ESTIMATE in de uren-methode.
  */
 export const FLAG_SEVERITY: Record<FlagCode, FlagSeverity> = {
   MISSING_DEPTH: "blocking",

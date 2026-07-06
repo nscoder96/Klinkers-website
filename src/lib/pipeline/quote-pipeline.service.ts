@@ -18,6 +18,7 @@ import { consolidatePavingActivities } from "./activity-consolidation";
 import type { AssemblyWithComponents } from "../assembly/assembly-loader";
 import {
   expandAssembly,
+  type AssemblyComponent,
   type ExpandResult,
   type PricingRow,
 } from "../assembly/assembly-expansion.service";
@@ -64,6 +65,11 @@ export interface PipelineActivity {
   opsluiting_lengte_m?: number;
   /** Vrije materiaalvoorkeur, voor de hoofd-materiaalregel. */
   materialPreference?: string;
+  /**
+   * Letterlijke bron-tekst uit de schouwnotitie (C2.5): gebruikt om te zien
+   * of afgraven/zand genoemd is terwijl de maat ontbreekt.
+   */
+  source_text?: string;
   /**
    * AI-geschatte arbeidsuren (2-mans koppel) voor deze activiteit, op basis
    * van de urennormen in de Laag 1-prompt. Urenbasis voor method 'uren' (A1).
@@ -159,6 +165,23 @@ function processActivity(
 
   const withComponents = assemblies.find((a) => a.id === assembly.id)!;
 
+  // C2.5: 'geen vermelding = geen regel' blijft het design, maar afgraven of
+  // zand genoemd in de notitie zónder maat mag niet stil wegvallen — dan
+  // blokkeren we zodat de maat in de bevestigingsstap aangevuld wordt.
+  // Zelfde patroon als MISSING_DIMENSIONS: geen regels, geen default-gok.
+  const measureFlags = detectMissingMeasures(activity, withComponents.components);
+  if (measureFlags.length > 0) {
+    return {
+      activity,
+      assembly,
+      expand: null,
+      display: null,
+      structured: null,
+      flags: measureFlags,
+      unmatched: false,
+    };
+  }
+
   const expand = expandAssembly(
     withComponents.components,
     {
@@ -222,6 +245,56 @@ function collectSectionFlags(
 }
 
 const dedupe = dedupeQuoteFlags;
+
+/** Woorden die aangeven dat er afgegraven wordt (afgraven/uitgraven/ontgraven/cunet). */
+const DIG_PATTERN = /afgra|uitgra|ontgra|cunet/;
+/** Woorden die aangeven dat er een zandbed/zandpakket in het werk zit. */
+const SAND_PATTERN = /zandbed|straatzand|zandpakket|\bzand\b/;
+
+/**
+ * C2.5: blocking flags voor een genoemde maar maatloze afgraaf-/zandpost.
+ * Vuurt alleen als de gekozen assembly ook echt met die maat rekent —
+ * herstraten gebruikt bv. een vast klein correctiezand-volume en heeft geen
+ * zanddikte nodig, dus daar is een zand-vermelding zonder dikte geen fout.
+ */
+function detectMissingMeasures(
+  activity: PipelineActivity,
+  components: AssemblyComponent[]
+): QuoteFlag[] {
+  const text = `${activity.description} ${activity.source_text ?? ""}`.toLowerCase();
+  const flags: QuoteFlag[] = [];
+
+  const depthDependent = components.some(
+    (c) =>
+      c.quantity_formula?.includes("afgraafdiepte_cm") ||
+      c.quantity_formula?.includes("cunet_m3") ||
+      (c.item_name_match?.toLowerCase().includes("afgraven") ?? false)
+  );
+  const sandDependent = components.some((c) =>
+    c.quantity_formula?.includes("zanddikte_cm")
+  );
+
+  const hasDepth = activity.afgraafdiepte_cm != null && activity.afgraafdiepte_cm > 0;
+  const hasSand = activity.zanddikte_cm != null && activity.zanddikte_cm > 0;
+
+  if (depthDependent && !hasDepth && DIG_PATTERN.test(text)) {
+    flags.push(
+      makeFlag(
+        "MISSING_DEPTH",
+        `Afgraven genoemd bij "${activity.description}" maar de diepte ontbreekt — vul de afgraafdiepte (cm) aan`
+      )
+    );
+  }
+  if (sandDependent && !hasSand && SAND_PATTERN.test(text)) {
+    flags.push(
+      makeFlag(
+        "MISSING_SAND_THICKNESS",
+        `Zandbed genoemd bij "${activity.description}" maar de dikte ontbreekt — vul de zanddikte (cm) aan`
+      )
+    );
+  }
+  return flags;
+}
 
 /**
  * Of de activiteit een afmeting heeft waar de assembly mee kan rekenen (C2.2):

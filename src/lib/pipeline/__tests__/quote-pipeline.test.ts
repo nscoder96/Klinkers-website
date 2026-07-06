@@ -131,6 +131,129 @@ describe("runQuotePipeline — C2.2: MISSING_DIMENSIONS", () => {
   });
 });
 
+describe("runQuotePipeline — C2.5: MISSING_DEPTH / MISSING_SAND_THICKNESS", () => {
+  it("afgraven genoemd zonder diepte → blocking MISSING_DEPTH, geen regels (MISSING_DIMENSIONS vangt dit niet af)", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Oprit klinkers, inclusief afgraven",
+          area_m2: 70,
+          source_text: "oprit 70m2, afgraven, klinkers",
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+
+    // Oppervlak is aanwezig — MISSING_DIMENSIONS vuurt terecht níet…
+    expect(result.flags.some((f) => f.code === "MISSING_DIMENSIONS")).toBe(false);
+    // …maar afgraven zonder diepte moet wél blokkeren in plaats van stil wegvallen.
+    const flag = result.flags.find((f) => f.code === "MISSING_DEPTH");
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe("blocking");
+    expect(result.sections[0].expand).toBeNull();
+    expect(result.hasBlockingFlags).toBe(true);
+  });
+
+  it("zandbed genoemd zonder dikte → blocking MISSING_SAND_THICKNESS", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Terras tegels met zandbed",
+          area_m2: 24,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    const flag = result.flags.find((f) => f.code === "MISSING_SAND_THICKNESS");
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe("blocking");
+    expect(result.sections[0].expand).toBeNull();
+  });
+
+  it("beide genoemd zonder maten → beide flags op één sectie", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Oprit: afgraven en zandbed aanbrengen",
+          area_m2: 70,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_DEPTH")).toBe(true);
+    expect(result.flags.some((f) => f.code === "MISSING_SAND_THICKNESS")).toBe(true);
+  });
+
+  it("afgraven en zandbed mét maten → geen depth/sand-flags (bestaand gedrag)", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Oprit: afgraven 20cm en zandbed 10cm",
+          area_m2: 70,
+          afgraafdiepte_cm: 20,
+          zanddikte_cm: 10,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_DEPTH")).toBe(false);
+    expect(result.flags.some((f) => f.code === "MISSING_SAND_THICKNESS")).toBe(false);
+    expect(result.sections[0].expand).not.toBeNull();
+  });
+
+  it("geen vermelding = geen regel én geen flag (design blijft staan)", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Oprit klinkers waalformaat",
+          area_m2: 70,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_DEPTH")).toBe(false);
+    expect(result.flags.some((f) => f.code === "MISSING_SAND_THICKNESS")).toBe(false);
+  });
+
+  it("herstraten met zand-vermelding → geen flag: die assembly rekent niet met zanddikte", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "herstraten",
+          description: "Terras herstraten, zandbed aanvullen",
+          area_m2: 24,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_SAND_THICKNESS")).toBe(false);
+    expect(result.sections[0].expand).not.toBeNull();
+  });
+});
+
 describe("runQuotePipeline — meerdere activiteiten", () => {
   it("Test 1: nieuwe oprit met aantekeningen → geen Gouda-vlaggen, container = 2", () => {
     const result = runQuotePipeline(
