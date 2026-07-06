@@ -53,4 +53,14 @@ describe("toPipelineActivity", () => {
     const a = toPipelineActivity(activity({ description: "Betonstraatstenen pad" }));
     expect(a.materialPreference).toBe("Betonstraatstenen pad");
   });
+
+  it("neemt de AI-urenschatting over (A1)", () => {
+    const a = toPipelineActivity(activity({ estimated_hours: 12.5 }));
+    expect(a.estimated_hours).toBe(12.5);
+  });
+
+  it("laat estimated_hours weg als de AI geen uren schatte", () => {
+    const a = toPipelineActivity(activity({}));
+    expect(a.estimated_hours).toBeUndefined();
+  });
 });

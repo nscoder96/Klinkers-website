@@ -54,6 +54,11 @@ export interface PipelineActivity {
   opsluiting_lengte_m?: number;
   /** Vrije materiaalvoorkeur, voor de hoofd-materiaalregel. */
   materialPreference?: string;
+  /**
+   * AI-geschatte arbeidsuren (2-mans koppel) voor deze activiteit, op basis
+   * van de urennormen in de Laag 1-prompt. Urenbasis voor method 'uren' (A1).
+   */
+  estimated_hours?: number;
 }
 
 export interface PipelineConfig {
@@ -162,12 +167,19 @@ function processActivity(
     hourly_rate: config.hourly_rate,
     min_hours_per_day: config.min_hours_per_day,
     day_rounding: config.day_rounding,
+    estimated_hours: activity.estimated_hours,
   });
 
   // Specifieke per-regel vlaggen (bv. "Geen prijs gevonden voor X") ophalen
   // zodat de gebruiker in de Let op-lijst ziet WELKE post een prijs mist.
+  // Methode-vlaggen (bv. uren-terugval) tellen ook mee.
   const lineFlags = expand.lines.flatMap((l) => l.flags);
-  const flags = dedupe([...lineFlags, ...expand.flags, ...structured.flags]);
+  const flags = dedupe([
+    ...lineFlags,
+    ...expand.flags,
+    ...display.flags,
+    ...structured.flags,
+  ]);
 
   return { activity, assembly, expand, display, structured, flags, unmatched: false };
 }

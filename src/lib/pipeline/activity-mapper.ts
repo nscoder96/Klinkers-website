@@ -43,6 +43,7 @@ export function toPipelineActivity(activity: Activity): PipelineActivity {
     zanddikte_cm: d.zanddikte_cm,
     opsluiting_lengte_m: d.opsluiting_lengte_m,
     materialPreference: deriveMaterialPreference(activity),
+    estimated_hours: activity.estimated_hours,
   };
 }
 

@@ -85,9 +85,15 @@ export function consolidatePavingActivities(
     if (!match) continue; // los grondwerk zonder bestrating erbovenop → behouden
 
     const cur = state.get(match)!;
-    if (cur.afgraafdiepte_cm == null) {
-      state.set(match, { ...cur, afgraafdiepte_cm: g.afgraafdiepte_cm });
-    }
+    state.set(match, {
+      ...cur,
+      afgraafdiepte_cm: cur.afgraafdiepte_cm ?? g.afgraafdiepte_cm,
+      // Uren van het ingevouwen grondwerk horen bij de klus — niet weggooien.
+      estimated_hours:
+        g.estimated_hours != null
+          ? (cur.estimated_hours ?? 0) + g.estimated_hours
+          : cur.estimated_hours,
+    });
     dropped.add(g);
   }
 

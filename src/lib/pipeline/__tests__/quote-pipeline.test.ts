@@ -195,6 +195,60 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     expect(result.sections[0].expand).toBeNull();
   });
 
+  it("Consistentie uitgesplitst vs uren (A1): identieke materialen en flags, arbeid verschilt qua opbouw", () => {
+    const activiteit = {
+      type: "bestrating",
+      action: "nieuw",
+      description: "Oprit klinkers waalformaat antraciet",
+      area_m2: 70,
+      length_m: 14,
+      width_m: 5,
+      afgraafdiepte_cm: 20,
+      zanddikte_cm: 10,
+      materialPreference: "klinkers waalformaat antraciet",
+      estimated_hours: 25.5,
+    };
+
+    const uitgesplitst = runQuotePipeline([activiteit], ASSEMBLIES, PRICING, {
+      method: "uitgesplitst",
+      layout: "uitgesplitst",
+    });
+    const uren = runQuotePipeline([activiteit], ASSEMBLIES, PRICING, {
+      method: "uren",
+      layout: "uitgesplitst",
+    });
+
+    // Materiaal- en materieelregels zijn identiek tussen beide methodes.
+    const nietArbeid = (r: typeof uitgesplitst) =>
+      r.sections[0].display!.lines.filter((l) => l.line_type !== "arbeid");
+    expect(nietArbeid(uren)).toEqual(nietArbeid(uitgesplitst));
+
+    // Flags zijn identiek (urenschatting aanwezig → geen terugval-vlag).
+    expect(uren.flags).toEqual(uitgesplitst.flags);
+    expect(uren.hasBlockingFlags).toBe(uitgesplitst.hasBlockingFlags);
+
+    // Arbeid verschilt bewust qua opbouw: uren-methode = één regel in uren.
+    const arbeidUren = uren.sections[0].display!.lines.filter((l) => l.line_type === "arbeid");
+    expect(arbeidUren).toHaveLength(1);
+    expect(arbeidUren[0].unit).toBe("uur");
+    expect(arbeidUren[0].quantity).toBe(32); // ceil(25.5/8) = 4 dagen × 8 u
+
+    // Totalen in dezelfde orde: de structurele breakdown is methode-onafhankelijk.
+    expect(uren.combined.breakdown).toEqual(uitgesplitst.combined.breakdown);
+  });
+
+  it("uren-methode zonder urenschatting → terugval-vlag zichtbaar op de sectie (A1)", () => {
+    const result = runQuotePipeline(
+      [{ type: "bestrating", action: "herstraten", description: "Terras herstraten", area_m2: 24 }],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uren", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.includes("Urenschatting ontbreekt"))).toBe(true);
+    // De terugval is een waarschuwing, geen blokkade.
+    expect(result.hasBlockingFlags).toBe(false);
+  });
+
   it("combineert breakdowns over secties (grand_total = som)", () => {
     const result = runQuotePipeline(
       [

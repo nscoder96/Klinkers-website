@@ -1,865 +1,600 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+/**
+ * Offerte-generator V2 (F8) — 3-stappen flow, tablet-proof.
+ *   Stap 1: Opdracht invoeren
+ *   Stap 2: Analyse reviewen (onderdelen + vlaggen)
+ *   Stap 3: Offerte finaliseren — bewerkbare regels, drag & drop, BTW-toggle
+ */
+
+import { useState, useCallback } from 'react';
+import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useAdminAuth } from '@/lib/useAdminAuth';
-import AdminLayout from '@/components/admin/AdminLayout'; // Wrapped in Layout
-import {
-  ArrowLeft,
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Loader2,
-  AlertTriangle,
-  ExternalLink,
-  ChevronRight,
-  Check,
-  Plus
-} from 'lucide-react';
-import MultiFormatInput from '@/components/quote/MultiFormatInput';
-import AnalysisProgress from '@/components/quote/AnalysisProgress';
-import KoppelprijsCheck from '@/components/quote/KoppelprijsCheck';
-import QuoteEditorTable, { Section, LineItem } from '@/components/quotes/QuoteEditorTable';
-import WorkBreakdownEditor, { WorkBreakdownEditorState } from '@/components/quotes/WorkBreakdownEditor';
-import type { WorkBreakdownV2 } from '@/lib/schemas/work-breakdown-v2.schema';
+import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Save } from 'lucide-react';
+import { SectionDndList } from './SectionDndList';
+import type { EditableLine, EditableSection } from './types';
 
-interface PricingItem {
-  id: string;
-  category: string;
-  item_name: string;
+// --- API response types ---
+
+interface DisplayLine {
+  description: string;
+  line_type: string;
+  quantity: number;
   unit: string;
-  selling_price_default: number;
-  item_type: 'arbeid' | 'materiaal';
+  unit_price_cents: number | null;
+  total_cents: number | null;
 }
-
-function maakExclusiesSectie(): Section {
-  const standaardExclusies = [
-    'Verplaatsen van tuinmeubilair, potten en plantenbakken',
-    'Sloopwerkzaamheden niet expliciet vermeld in de offerte',
-    'Afvoer van materialen met gevaarlijke stoffen (bijv. asbest)',
-    'Grondwerkzaamheden buiten de beschreven oppervlakte',
-    'Meerwerk buiten de omschreven werkzaamheden',
-    'Water en elektra tijdens uitvoering (dient beschikbaar te zijn)',
-  ];
-
-  return {
-    id: crypto.randomUUID(),
-    title: 'Niet inbegrepen',
-    category: 'overig',
-    items: standaardExclusies.map((beschrijving) => ({
-      id: crypto.randomUUID(),
-      description: beschrijving,
-      quantity: 1,
-      unit: 'stuk',
-      unit_price: 0,
-      total_price: 0,
-      line_type: 'arbeid' as const,
-      markup_percent: null,
-      vat_rate: 0,
-      is_ai_calculated: false,
-      calculation_breakdown: null,
-      pricing_id: null,
-    })),
-    subtotal: 0,
-    isExpanded: false,
+interface Breakdown {
+  subtotal: number;
+  vat_9_amount: number;
+  vat_21_amount: number;
+  grand_total: number;
+}
+interface Distribution {
+  labor_pct: number;
+  materials_pct: number;
+  equipment_pct: number;
+  within_norm: boolean;
+  warnings: string[];
+}
+interface Section {
+  title: string;
+  assembly: string | null;
+  unmatched: boolean;
+  display_lines: DisplayLine[];
+  breakdown: Breakdown | null;
+  distribution: Distribution | null;
+  flags: string[];
+}
+interface Activity {
+  type: string;
+  action: string;
+  description: string;
+  dimensions: { area?: number; length?: number; width?: number };
+  missing_dimensions?: boolean;
+}
+interface PipelineResponse {
+  ai: { summary: string; confidence: number; activities: Activity[] };
+  config: { method: string; layout: string };
+  pipeline: {
+    sections: Section[];
+    combined: { breakdown: Breakdown; distribution: Distribution };
+    flags: string[];
+    hasBlockingFlags: boolean;
   };
 }
 
-export default function NieuweOfferte() {
-  const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAdminAuth();
+// --- Helpers ---
 
-  // Customer info state
+const euro = (cents: number | null) =>
+  cents == null
+    ? '—'
+    : `€ ${(cents / 100).toLocaleString('nl-NL', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+
+function lineTotal(l: EditableLine): number | null {
+  if (l.unit_price_cents == null) return null;
+  return Math.round(l.unit_price_cents * l.quantity);
+}
+
+// Simple incrementing ID — deterministic, SSR-safe
+let _idCounter = 0;
+const nextId = () => `eid-${++_idCounter}`;
+
+const EMPTY_LINE = (): EditableLine => ({
+  id: nextId(),
+  description: '',
+  line_type: 'arbeid',
+  quantity: 1,
+  unit: 'st',
+  unit_price_cents: null,
+});
+
+const PLACEHOLDER_LINE = (): EditableLine => ({
+  id: nextId(),
+  description: 'Vul aan',
+  line_type: 'arbeid',
+  quantity: 1,
+  unit: 'st',
+  unit_price_cents: null,
+});
+
+function toEditableSections(sections: Section[]): EditableSection[] {
+  return sections.map((s) => ({
+    id: nextId(),
+    title: s.title,
+    flags: s.flags,
+    unmatched: s.unmatched,
+    lines:
+      s.display_lines.length > 0
+        ? s.display_lines.map((l) => ({
+            id: nextId(),
+            description: l.description,
+            line_type: l.line_type,
+            quantity: l.quantity,
+            unit: l.unit,
+            unit_price_cents: l.unit_price_cents,
+          }))
+        : s.unmatched
+          ? [PLACEHOLDER_LINE()]
+          : [],
+  }));
+}
+
+// --- Page ---
+
+export default function NieuwV2Page() {
+  const { isLoading: authLoading } = useAdminAuth();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [notes, setNotes] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [customerAddress, setCustomerAddress] = useState('');
-
-  // Duplicate detection state
-  interface DuplicateLead {
-    id: string;
-    name: string;
-    phone: string | null;
-    email: string | null;
-    city: string | null;
-    status: string;
-    match_type: 'name' | 'phone' | 'email';
-  }
-  const [duplicates, setDuplicates] = useState<DuplicateLead[]>([]);
-  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-
-  // Quote state
-  const [pricing, setPricing] = useState<PricingItem[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [method, setMethod] = useState('uitgesplitst');
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PipelineResponse | null>(null);
+  const [editableSections, setEditableSections] = useState<EditableSection[]>([]);
+  const [savedNumber, setSavedNumber] = useState<string | null>(null);
+  const [savedQuoteId, setSavedQuoteId] = useState<string | null>(null);
+  const [showIncl, setShowIncl] = useState(false);
 
-  // AI state
-  const [kladNotities, setKladNotities] = useState('');
-  const [aiSummary, setAiSummary] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [showAnalysisProgress, setShowAnalysisProgress] = useState(false);
-  const [patroon, setPatroon] = useState<'recht' | 'halfsteens' | 'visgraat' | 'rond'>('recht');
-  const [grondtype, setGrondtype] = useState<'zand' | 'klei' | 'veen'>('zand');
-  const [bereikbaarheid, setBereikbaarheid] = useState<'goed' | 'matig' | 'slecht'>('goed');
-  const [afvoer, setAfvoer] = useState<'nee' | 'container' | 'handmatig'>('nee');
-  const [uurprijs, setUurprijs] = useState(55);
-
-  // Steps: 'input' | 'analyzing' | 'editor'
-  const [step, setStep] = useState<'input' | 'analyzing' | 'editor'>('input');
-
-  // V2 Pipeline state
-  const [pipelineVersion, setPipelineVersion] = useState<'v1' | 'v2'>('v2');
-  const [workBreakdownV2, setWorkBreakdownV2] = useState<WorkBreakdownV2 | null>(null);
-  const [workBreakdownEditorState, setWorkBreakdownEditorState] = useState<WorkBreakdownEditorState | null>(null);
-  const [analyzingV2, setAnalyzingV2] = useState(false);
-
-  const fetchData = useCallback(async () => {
+  const analyze = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const [pricingRes, settingsRes] = await Promise.all([
-        fetch('/api/admin/pricing'),
-        fetch('/api/admin/quote-settings'),
-      ]);
-      if (pricingRes.ok) {
-        const pricingData = await pricingRes.json();
-        setPricing(pricingData.pricing || []);
-      }
-      if (settingsRes.ok) {
-        const settingsData = await settingsRes.json();
-        if (settingsData.settings?.default_hourly_rate) {
-          setUurprijs(settingsData.settings.default_hourly_rate);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
+      const res = await fetch('/api/admin/quote/generate-v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes, method, projectAddress: customerAddress }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Analyse mislukt');
+      setResult(data);
+      setEditableSections(toEditableSections(data.pipeline.sections));
+      setStep(2);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Er ging iets mis');
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchData();
-    }
-  }, [isAuthenticated, fetchData]);
-
-  // Check for duplicates when customer info changes
-  useEffect(() => {
-    const checkDuplicates = async () => {
-      // Only check if we have at least some input
-      if (!customerName && !customerPhone && !customerEmail) {
-        setDuplicates([]);
-        return;
-      }
-
-      // Debounce - wait a bit before checking
-      setCheckingDuplicates(true);
-      try {
-        const response = await fetch('/api/admin/leads/check-duplicate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: customerName,
-            phone: customerPhone,
-            email: customerEmail
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setDuplicates(data.duplicates || []);
-        }
-      } catch (error) {
-        console.error('Error checking duplicates:', error);
-      } finally {
-        setCheckingDuplicates(false);
-      }
-    };
-
-    // Debounce the check
-    const timeoutId = setTimeout(checkDuplicates, 500);
-    return () => clearTimeout(timeoutId);
-  }, [customerName, customerPhone, customerEmail]);
-
-  // Use existing lead
-  const useExistingLead = (lead: DuplicateLead) => {
-    setSelectedLeadId(lead.id);
-    setCustomerName(lead.name);
-    if (lead.phone) setCustomerPhone(lead.phone);
-    if (lead.email) setCustomerEmail(lead.email);
-    if (lead.city) setCustomerAddress(lead.city);
-    setDuplicates([]); // Clear duplicates after selection
   };
 
-  // Save quote
-  const saveQuote = async () => {
+  const persist = async () => {
     setSaving(true);
+    setError(null);
     try {
-      // Convert sections to database format
-      const quoteSections = sections.map((section, index) => ({
-        title: section.title,
-        category: section.category,
-        display_order: index + 1,
-        line_items: section.items.map((item, itemIndex) => ({
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-          line_type: item.line_type,
-          markup_percent: item.markup_percent,
-          vat_rate: item.vat_rate,
-          display_order: itemIndex + 1,
-          pricing_id: item.pricing_id,
-          is_ai_calculated: item.is_ai_calculated,
-          calculation_breakdown: item.calculation_breakdown
-        }))
-      }));
-
-      const response = await fetch('/api/admin/quotes', {
+      const res = await fetch('/api/admin/quote/generate-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          customer_email: customerEmail,
-          customer_address: customerAddress,
-          project_description: aiSummary,
-          sections: quoteSections,
-          status: 'draft',
-          existing_lead_id: selectedLeadId // Use existing lead if selected
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        router.push(`/admin/offertes/${data.quote.id}`);
-      } else {
-        alert('Opslaan mislukt');
-      }
-    } catch (error) {
-      console.error('Error saving quote:', error);
-      alert('Er ging iets mis bij het opslaan');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // V2: Analyseer met nieuwe pipeline
-  const analyzeV2 = async () => {
-    if (!kladNotities.trim()) return;
-    setAnalyzingV2(true);
-    setStep('analyzing');
-    try {
-      const response = await fetch('/api/admin/analyze-v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: kladNotities }),
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        alert('Analyse mislukt: ' + (err.error || 'Onbekende fout'));
-        setStep('input');
-        return;
-      }
-      const data = await response.json();
-      setWorkBreakdownV2(data.breakdown);
-      setStep('editor');
-    } catch (error) {
-      console.error('V2 analyse fout:', error);
-      alert('Er ging iets mis tijdens de analyse');
-      setStep('input');
-    } finally {
-      setAnalyzingV2(false);
-    }
-  };
-
-  // V2: Offerte opslaan met work_items
-  const saveQuoteV2 = async () => {
-    if (!workBreakdownEditorState && !workBreakdownV2) return;
-    setSaving(true);
-    try {
-      const breakdown = workBreakdownEditorState?.breakdown ?? workBreakdownV2!;
-
-      // Verzamel alle werkitems voor work_items tabel
-      const allWorkItems: Array<{
-        section_name: string;
-        description: string;
-        hours_estimated: number;
-        material_flag: string;
-        material_qty?: number;
-        material_unit?: string;
-        material_desc?: string;
-        work_type_key?: string;
-        display_order: number;
-      }> = [];
-      let order = 0;
-
-      // Voorbereidend werk
-      for (const item of breakdown.preparatory.items) {
-        allWorkItems.push({
-          section_name: breakdown.preparatory.name,
-          description: item.description,
-          hours_estimated: item.hours_estimated,
-          material_flag: item.material_flag,
-          material_qty: item.material_qty,
-          material_unit: item.material_unit,
-          material_desc: item.material_desc,
-          work_type_key: item.work_type_key,
-          display_order: order++,
-        });
-      }
-
-      // Gebieden
-      for (const area of breakdown.areas) {
-        for (const item of area.items) {
-          allWorkItems.push({
-            section_name: area.name,
-            description: item.description,
-            hours_estimated: item.hours_estimated,
-            material_flag: item.material_flag,
-            material_qty: item.material_qty,
-            material_unit: item.material_unit,
-            material_desc: item.material_desc,
-            work_type_key: item.work_type_key,
-            display_order: order++,
-          });
-        }
-      }
-
-      // Sla quote op (gebruik project_description als samenvatting)
-      const quoteResponse = await fetch('/api/admin/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          customer_email: customerEmail,
-          customer_address: customerAddress,
-          project_description: breakdown.project_summary,
-          sections: [], // V2 gebruikt work_items ipv sections
-          status: 'draft',
-          existing_lead_id: selectedLeadId,
-          pipeline_version: 'v2',
+          notes,
+          method,
+          persist: true,
+          projectDescription: customerName ? `Offerte voor ${customerName}` : undefined,
+          projectAddress: customerAddress,
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerAddress,
         }),
       });
-
-      if (!quoteResponse.ok) {
-        alert('Opslaan offerte mislukt');
-        return;
-      }
-
-      const quoteData = await quoteResponse.json();
-      const quoteId = quoteData.quote.id;
-
-      // Sla work_items op
-      if (allWorkItems.length > 0) {
-        await fetch('/api/admin/work-items', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            quote_id: quoteId,
-            items: allWorkItems,
-            trigger_learning: true,
-          }),
-        });
-      }
-
-      router.push(`/admin/offertes/${quoteId}`);
-    } catch (error) {
-      console.error('V2 opslaan fout:', error);
-      alert('Er ging iets mis bij het opslaan');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Opslaan mislukt');
+      setSavedNumber(data.persistence?.quoteNumber ?? 'opgeslagen');
+      setSavedQuoteId(data.persistence?.quoteId ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
   };
 
-  // Handle analysis complete
-  const handleAnalysisComplete = (result: {
-    analysis: string;
-    sections: Array<{
-      category: string;
-      title: string;
-      items: Array<{
-        id: string;
-        description: string;
-        quantity: number;
-        unit: string;
-        unit_price: number;
-        total_price: number;
-        line_type: 'arbeid' | 'materiaal';
-        pricing_id?: string | null;
-        is_ai_calculated: boolean;
-        calculation_breakdown?: {
-          formula: string;
-          explanation: string;
-          source: string;
-        } | null;
-      }>;
-      subtotal: number;
-    }>;
-  }) => {
-    setAiSummary(result.analysis);
+  const updateLine = useCallback(
+    (si: number, li: number, patch: Partial<EditableLine>) => {
+      setEditableSections((prev) =>
+        prev.map((section, s) =>
+          s !== si
+            ? section
+            : {
+                ...section,
+                lines: section.lines.map((line, l) =>
+                  l !== li ? line : { ...line, ...patch }
+                ),
+              }
+        )
+      );
+    },
+    []
+  );
 
-    // Convert to our Section format
-    const newSections: Section[] = result.sections.map((section) => ({
-      id: crypto.randomUUID(),
-      title: section.title,
-      category: section.category,
-      items: section.items.map((item) => ({
-        id: item.id || crypto.randomUUID(),
-        description: item.description,
-        quantity: item.quantity,
-        unit: item.unit,
-        unit_price: item.unit_price,
-        total_price: item.total_price,
-        line_type: item.line_type,
-        markup_percent: item.line_type === 'materiaal' ? 10 : null,
-        vat_rate: 21,
-        is_ai_calculated: item.is_ai_calculated,
-        calculation_breakdown: item.calculation_breakdown,
-        pricing_id: item.pricing_id
-      })),
-      subtotal: section.subtotal,
-      isExpanded: true
-    }));
+  const addLine = useCallback((si: number) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) =>
+        s !== si
+          ? section
+          : { ...section, lines: [...section.lines, EMPTY_LINE()] }
+      )
+    );
+  }, []);
 
-    setSections([...newSections, maakExclusiesSectie()]);
-    setShowAnalysisProgress(false);
-    setAnalyzing(false);
-    setStep('editor');
-  };
+  const reorderLines = useCallback((si: number, newLines: EditableLine[]) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) => (s !== si ? section : { ...section, lines: newLines }))
+    );
+  }, []);
 
-  // Loading state
-  if (authLoading || loading) {
+  const deleteLine = useCallback((si: number, li: number) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) =>
+        s !== si
+          ? section
+          : { ...section, lines: section.lines.filter((_, l) => l !== li) }
+      )
+    );
+  }, []);
+
+  const deleteSection = useCallback((si: number) => {
+    setEditableSections((prev) => prev.filter((_, s) => s !== si));
+  }, []);
+
+  const reorderSections = useCallback((newSections: EditableSection[]) => {
+    setEditableSections(newSections);
+  }, []);
+
+  // Live totals — always computed excl. BTW
+  const liveTotals = (() => {
+    let subtotal = 0;
+    let labor = 0;
+    let material = 0;
+    for (const s of editableSections) {
+      for (const l of s.lines) {
+        const tot = lineTotal(l) ?? 0;
+        subtotal += tot;
+        if (l.line_type === 'arbeid') labor += tot;
+        else if (l.line_type === 'materiaal') material += tot;
+      }
+    }
+    const vat21 = Math.round(subtotal * 0.21);
+    const grand = subtotal + vat21;
+    const laborPct = subtotal > 0 ? Math.round((labor / subtotal) * 100) : 0;
+    const materialPct = subtotal > 0 ? Math.round((material / subtotal) * 100) : 0;
+    return { subtotal, vat21, grand, laborPct, materialPct };
+  })();
+
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-      </div>
+      <AdminLayout>
+        <div className="py-20 text-center text-slate-500">Laden…</div>
+      </AdminLayout>
     );
   }
 
-  // Not authenticated
-  if (!isAuthenticated) return null;
+  const combined = result?.pipeline.combined;
 
   return (
     <AdminLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <Stepper step={step} />
 
-        {/* Wizard Progress Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/offertes">
-              <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-900">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Annuleren
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">Nieuwe Offerte</h1>
-              <p className="text-sm text-slate-500">Volg de stappen om een slimme offerte te maken.</p>
-            </div>
-          </div>
-
-          {/* Steps */}
-          <div className="flex items-center bg-white rounded-full border border-slate-200 p-1 shadow-sm">
-            {[
-              { id: 'input', label: '1. Gegevens & Notities' },
-              { id: 'analyzing', label: '2. AI Analyse' },
-              { id: 'editor', label: '3. Bewerken & Versturen' }
-            ].map((s, i) => (
-              <div key={s.id} className="flex items-center">
-                {i > 0 && <div className="w-8 h-px bg-slate-200 mx-2" />}
-                <div className={`
-                           px-4 py-1.5 rounded-full text-sm font-medium transition-all
-                           ${step === s.id
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : (step === 'editor' && s.id !== 'editor') || (step === 'analyzing' && s.id === 'input')
-                      ? 'text-green-600 bg-green-50'
-                      : 'text-slate-400'
-                  }
-                       `}>
-                  {((step === 'editor' && s.id !== 'editor') || (step === 'analyzing' && s.id === 'input')) ? (
-                    <div className="flex items-center gap-2">
-                      <Check className="w-3 h-3" />
-                      <span>{s.label.split('. ')[1]}</span>
-                    </div>
-                  ) : s.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Step 1: Input */}
-        {step === 'input' && (
-          <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-
-            {/* Left Column: Customer Info */}
-            <Card className="lg:col-span-1 border-slate-200 shadow-sm h-fit">
-              <CardHeader className="bg-slate-50 border-b border-slate-100">
-                <CardTitle className="text-base font-semibold text-slate-900">Klantgegevens</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">Naam</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                    <Input
-                      className="pl-9"
-                      placeholder="vb. Jan Jansen"
-                      value={customerName}
-                      onChange={e => setCustomerName(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                    <Input
-                      className="pl-9"
-                      placeholder="jan@example.com"
-                      value={customerEmail}
-                      onChange={e => setCustomerEmail(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">Telefoon</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                    <Input
-                      className="pl-9"
-                      placeholder="06 12345678"
-                      value={customerPhone}
-                      onChange={e => setCustomerPhone(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">Adres</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                    <Input
-                      className="pl-9"
-                      placeholder="Straat 123, Plaats"
-                      value={customerAddress}
-                      onChange={e => setCustomerAddress(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Duplicate Warning */}
-                {duplicates.length > 0 && (
-                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                    <div className="flex items-center gap-2 text-amber-800 font-medium mb-2">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>{duplicates.length} Bekende klant(en)</span>
-                    </div>
-                    <div className="space-y-2">
-                      {duplicates.map(dup => (
-                        <div key={dup.id} className="bg-white p-2 rounded border border-amber-100 flex justify-between items-center">
-                          <div>
-                            <div className="font-medium text-slate-900">{dup.name}</div>
-                            <div className="text-xs text-slate-500">{dup.city}</div>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
-                            onClick={() => useExistingLead(dup)}
-                          >
-                            Gebruik
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedLeadId && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
-                    <span className="text-sm text-green-700 font-medium">Gekoppeld aan {customerName}</span>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedLeadId(null)} className="h-6 w-6 p-0 text-green-700">
-                      &times;
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Right Column: AI Input */}
-            <Card className="lg:col-span-2 border-slate-200 shadow-sm flex flex-col">
-              <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-semibold text-slate-900">Project Notities</CardTitle>
-                <div className="flex items-center gap-2">
-                  {/* Pipeline version toggle */}
-                  <div className="flex items-center bg-white border border-slate-200 rounded-full p-0.5 text-xs">
-                    <button
-                      onClick={() => setPipelineVersion('v2')}
-                      className={`px-3 py-1 rounded-full transition-all font-medium ${pipelineVersion === 'v2' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                      Uren-model
-                    </button>
-                    <button
-                      onClick={() => setPipelineVersion('v1')}
-                      className={`px-3 py-1 rounded-full transition-all font-medium ${pipelineVersion === 'v1' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                      Klassiek
-                    </button>
-                  </div>
-                  <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded-full border border-purple-200">
-                    AI Powered
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6 flex-1 flex flex-col">
-                <div className="flex-1">
-                  <MultiFormatInput
-                    onTextReady={(text) => setKladNotities(text)}
-                    onAnalyze={(text) => {
-                      setKladNotities(text);
-                      if (text.trim()) {
-                        setAnalyzing(true);
-                        setShowAnalysisProgress(true);
-                        setStep('analyzing');
-                      }
-                    }}
-                    isAnalyzing={analyzing}
-                  />
-                </div>
-                {/* Schouwcontext */}
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <p className="text-xs font-medium text-slate-500 uppercase mb-3">Schouwcontext</p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-500">Patroon</label>
-                      <select
-                        className="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        value={patroon}
-                        onChange={e => setPatroon(e.target.value as typeof patroon)}
-                      >
-                        <option value="recht">Recht</option>
-                        <option value="halfsteens">Halfsteens</option>
-                        <option value="visgraat">Visgraat (+12%)</option>
-                        <option value="rond">Ronde vormen (+20%)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-500">Grondtype</label>
-                      <select
-                        className="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        value={grondtype}
-                        onChange={e => setGrondtype(e.target.value as typeof grondtype)}
-                      >
-                        <option value="zand">Zandgrond (15cm)</option>
-                        <option value="klei">Kleigrond (35cm)</option>
-                        <option value="veen">Veengrond (40cm)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-500">Bereikbaarheid</label>
-                      <select
-                        className="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        value={bereikbaarheid}
-                        onChange={e => setBereikbaarheid(e.target.value as typeof bereikbaarheid)}
-                      >
-                        <option value="goed">Goed</option>
-                        <option value="matig">Matig (+20%)</option>
-                        <option value="slecht">Slecht (+35%)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-500">Afvoer puin</label>
-                      <select
-                        className="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        value={afvoer}
-                        onChange={e => setAfvoer(e.target.value as typeof afvoer)}
-                      >
-                        <option value="nee">Geen afvoer</option>
-                        <option value="handmatig">Handmatig afvoeren</option>
-                        <option value="container">Container huren</option>
-                      </select>
-                    </div>
-                  </div>
-                  {afvoer === 'container' && (
-                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>Vergeet de puincontainer in te prijzen — check actuele prijs (momenteel ~€159 incl. btw). Verwerk dit als losse post in de offerte.</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setStep('editor')}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    Sla over, ik vul zelf in
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (!kladNotities.trim()) return;
-                      if (pipelineVersion === 'v2') {
-                        analyzeV2();
-                      } else {
-                        setAnalyzing(true);
-                        setShowAnalysisProgress(true);
-                        setStep('analyzing');
-                      }
-                    }}
-                    disabled={!kladNotities.trim()}
-                    className={`px-6 ${pipelineVersion === 'v2' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'} text-white`}
-                  >
-                    {pipelineVersion === 'v2' ? 'Analyseer (uren-model)' : 'Genereer Offerte'}
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        {error && (
+          <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+            {error}
           </div>
         )}
 
-        {/* Step 2: Analysis */}
-        {step === 'analyzing' && analyzingV2 && (
-          <div className="max-w-2xl mx-auto py-12 flex flex-col items-center gap-6">
-            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        {/* STAP 1 */}
+        {step === 1 && (
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
+            <h2 className="text-lg font-semibold text-slate-900">Stap 1 · Opdracht invoeren</h2>
+            <textarea
+              className="min-h-[160px] w-full rounded-md border border-slate-300 p-3 text-sm"
+              placeholder="Beschrijf de opdracht. Bijv: Oprit 5×14m, afgraven 20cm, zandbed 10cm, klinkers waalformaat antraciet, opsluitbanden rondom."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <input
+                className="rounded-md border border-slate-300 p-2 text-sm"
+                placeholder="Klantnaam (optioneel)"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-slate-300 p-2 text-sm"
+                placeholder="Adres (optioneel)"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-slate-300 p-2 text-sm"
+                placeholder="Telefoon (optioneel)"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-slate-300 p-2 text-sm"
+                placeholder="E-mail (optioneel)"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+              />
             </div>
-            <div className="text-center">
-              <h2 className="text-lg font-semibold text-slate-900">Werkopsplitsing maken...</h2>
-              <p className="text-sm text-slate-500 mt-1">AI analyseert de notities en schat uren per gebied</p>
-            </div>
-          </div>
-        )}
-
-        {step === 'analyzing' && showAnalysisProgress && (
-          <div className="max-w-2xl mx-auto py-12">
-            <Card className="border-0 shadow-2xl">
-              <CardContent className="p-0">
-                <AnalysisProgress
-                  notes={kladNotities}
-                  patroon={patroon}
-                  grondtype={grondtype}
-                  bereikbaarheid={bereikbaarheid}
-                  onComplete={handleAnalysisComplete}
-                  onCancel={() => {
-                    setShowAnalysisProgress(false);
-                    setAnalyzing(false);
-                    setStep('input');
-                  }}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Step 3: Editor V2 (uren-model) */}
-        {step === 'editor' && workBreakdownV2 && (
-          <div className="animate-fade-in max-w-3xl mx-auto space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Werkdocument</h2>
-                <p className="text-sm text-slate-500">Controleer en pas uren aan — klik op een waarde om te bewerken</p>
-              </div>
-              <Button
-                onClick={saveQuoteV2}
-                disabled={saving}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-600">Prijsmethode:</label>
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+                className="rounded-md border border-slate-300 p-2 text-sm"
               >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Offerte opslaan
+                <option value="uitgesplitst">Uitgesplitst — elke post apart</option>
+                <option value="meterprijs">Meterprijs / aanneemsom</option>
+                <option value="uren">Uren × uurtarief</option>
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={analyze} disabled={loading || notes.trim().length === 0}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Analyseer <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
+          </div>
+        )}
 
-            {customerName && (
-              <div className="text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
-                Klant: <strong>{customerName}</strong>
-                {customerAddress && <span className="text-slate-400"> · {customerAddress}</span>}
+        {/* STAP 2 */}
+        {step === 2 && result && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">Stap 2 · Analyse reviewen</h2>
+            <p className="text-sm text-slate-500">{result.ai.summary}</p>
+
+            {result.pipeline.flags.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                  Let op bij de offerte
+                </p>
+                {result.pipeline.flags.map((f, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-amber-900">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <span>{f}</span>
+                  </div>
+                ))}
               </div>
             )}
 
-            <WorkBreakdownEditor
-              initialBreakdown={workBreakdownV2}
-              hourlyRate={uurprijs}
-              onChange={(state) => setWorkBreakdownEditorState(state)}
-            />
-          </div>
-        )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {result.ai.activities.map((a, i) => (
+                <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-slate-900">{a.description}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                      {a.action}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    {a.type}
+                    {a.dimensions.area ? ` · ${a.dimensions.area} m²` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-        {/* Step 3: Editor V1 (klassiek) */}
-        {step === 'editor' && !workBreakdownV2 && (
-          <div className="animate-fade-in space-y-4">
-            {sections.length > 0 && (() => {
-              const totaalArbeid = sections.reduce((sum, section) =>
-                sum + section.items
-                  .filter(item => item.line_type === 'arbeid')
-                  .reduce((s, item) => s + item.total_price, 0), 0
-              );
-              const totalM2 = sections.reduce((sum, section) =>
-                sum + section.items
-                  .filter(item => (item.unit === 'm²' || item.unit === 'm2') && item.line_type === 'arbeid')
-                  .reduce((s, item) => s + item.quantity, 0), 0
-              );
+            {(() => {
+              const missing = result.ai.activities.filter((a) => a.missing_dimensions);
+              if (missing.length === 0) return null;
               return (
-                <div className="max-w-xs">
-                  <KoppelprijsCheck
-                    totaalExclBtw={totaalArbeid}
-                    uurprijs={uurprijs}
-                    totalM2={totalM2}
-                  />
+                <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    Afmetingen ontbreken voor: {missing.map((a) => a.description).join(', ')}
+                  </p>
+                  <p className="mt-1 text-xs text-red-700">
+                    Voeg lengte × breedte toe aan de schouwnotitie en analyseer opnieuw voor een correcte offerte.
+                  </p>
                 </div>
               );
             })()}
-            <QuoteEditorTable
-              sections={sections}
-              onSectionsChange={setSections}
-              pricing={pricing}
-              aiSummary={aiSummary}
-              onSave={saveQuote}
-              onExportPDF={() => alert('PDF export komt binnenkort!')}
-              isSaving={saving}
-              customerName={customerName}
-              projectName=""
-            />
 
-            {sections.length === 0 && (
-              <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
-                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Plus className="w-8 h-8 text-slate-300" />
-                </div>
-                <h3 className="text-lg font-medium text-slate-900">Nog geen items</h3>
-                <p className="text-slate-500 mb-6">Begin met het toevoegen van een sectie om je offerte op te bouwen.</p>
-                <Button
-                  onClick={() => {
-                    const newSection: Section = {
-                      id: crypto.randomUUID(),
-                      title: 'Werkzaamheden',
-                      category: 'overig',
-                      items: [],
-                      subtotal: 0,
-                      isExpanded: true
-                    };
-                    setSections([newSection]);
-                  }}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  Sectie Toevoegen
-                </Button>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(1)}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Terug
+              </Button>
+              <Button onClick={() => setStep(3)}>
+                Bereken offerte <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
 
+        {/* STAP 3 */}
+        {step === 3 && result && combined && (
+          <div className="flex flex-col gap-6 lg:flex-row">
+            {/* Main content */}
+            <div className="flex-1 space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Stap 3 · Offerte finaliseren</h2>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Sleep secties en regels om te herschikken. Klik op een veld om het aan te passen.
+                </p>
+              </div>
+
+              {!combined.distribution.within_norm && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="flex items-center gap-2 font-semibold">
+                    <AlertTriangle className="h-4 w-4" /> Kostenverdeling wijkt af van de 55/35/10-norm
+                  </p>
+                  <ul className="mt-1 list-disc pl-6">
+                    {combined.distribution.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <SectionDndList
+                sections={editableSections}
+                showIncl={showIncl}
+                onUpdateLine={updateLine}
+                onAddLine={addLine}
+                onDeleteLine={deleteLine}
+                onDeleteSection={deleteSection}
+                onReorderLines={reorderLines}
+                onReorderSections={reorderSections}
+              />
+
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep(2)}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Terug
+                </Button>
+              </div>
+            </div>
+
+            {/* Sticky sidebar */}
+            <aside className="lg:w-72">
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 lg:sticky lg:top-4">
+                <h3 className="font-semibold text-slate-900">Totalen</h3>
+
+                {/* BTW toggle */}
+                <div className="flex overflow-hidden rounded border border-slate-200 text-xs font-medium">
+                  <button
+                    onClick={() => setShowIncl(false)}
+                    className={`flex-1 py-1.5 transition-colors ${
+                      !showIncl
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    Excl. BTW
+                  </button>
+                  <button
+                    onClick={() => setShowIncl(true)}
+                    className={`flex-1 py-1.5 transition-colors ${
+                      showIncl
+                        ? 'bg-orange-500 text-white'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    Incl. BTW
+                  </button>
+                </div>
+
+                {/* Totalen display */}
+                {showIncl ? (
+                  <>
+                    <div className="rounded-md bg-orange-50 p-3 text-center">
+                      <div className="text-xl font-bold text-slate-900">
+                        {euro(liveTotals.grand)}
+                      </div>
+                      <div className="text-xs text-slate-500">Totaal incl. BTW</div>
+                    </div>
+                    <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                      <Row label="Subtotaal excl. BTW" value={euro(liveTotals.subtotal)} />
+                      <Row label="BTW 21%" value={euro(liveTotals.vat21)} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Row label="Subtotaal excl. BTW" value={euro(liveTotals.subtotal)} />
+                    <Row label="BTW 21%" value={euro(liveTotals.vat21)} />
+                    <div className="border-t border-slate-200 pt-2">
+                      <Row label="Totaal incl. BTW" value={euro(liveTotals.grand)} bold />
+                    </div>
+                  </>
+                )}
+
+                <div className="pt-1 text-xs text-slate-400">
+                  Arbeid {liveTotals.laborPct}% · Materiaal {liveTotals.materialPct}%
+                </div>
+
+                {result.pipeline.hasBlockingFlags && (
+                  <p className="rounded bg-amber-50 p-2 text-xs text-amber-800">
+                    Controleer de vlaggen in stap 2 vóór verzenden.
+                  </p>
+                )}
+
+                {savedNumber ? (
+                  <div className="space-y-2">
+                    <p className="rounded bg-green-50 p-2 text-sm text-green-800">
+                      Opgeslagen als concept {savedNumber}.
+                    </p>
+                    {savedQuoteId && (
+                      <Button asChild className="w-full">
+                        <a href={`/admin/offertes/${savedQuoteId}`}>
+                          Offerte openen en versturen
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <Button className="w-full" onClick={persist} disabled={saving}>
+                      {saving ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Opslaan als concept
+                    </Button>
+                    <p className="text-center text-xs text-slate-400">
+                      Na opslaan kun je de offerte versturen.
+                    </p>
+                  </>
+                )}
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
     </AdminLayout>
+  );
+}
+
+// --- Stepper ---
+
+function Stepper({ step }: { step: number }) {
+  const labels = ['Invoer', 'Analyse', 'Finaliseren'];
+  return (
+    <div className="flex items-center gap-2">
+      {labels.map((label, i) => {
+        const n = i + 1;
+        const active = step === n;
+        const done = step > n;
+        return (
+          <div key={label} className="flex items-center gap-2">
+            <span
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
+                active
+                  ? 'bg-orange-500 text-white'
+                  : done
+                    ? 'bg-green-500 text-white'
+                    : 'bg-slate-200 text-slate-500'
+              }`}
+            >
+              {n}
+            </span>
+            <span
+              className={`text-sm ${active ? 'font-medium text-slate-900' : 'text-slate-500'}`}
+            >
+              {label}
+            </span>
+            {n < 3 && <span className="mx-1 h-px w-6 bg-slate-200" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Row (sidebar) ---
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-slate-500">{label}</span>
+      <span className={bold ? 'font-bold text-slate-900' : 'text-slate-700'}>{value}</span>
+    </div>
   );
 }

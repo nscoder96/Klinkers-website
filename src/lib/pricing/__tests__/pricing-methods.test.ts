@@ -130,4 +130,34 @@ describe("applyPricingMethod — uren × uurtarief (Methode C)", () => {
     const arbeid = dearder.lines.find((l) => l.line_type === "arbeid")!;
     expect(arbeid.total_cents).toBe(16 * 95 * 100); // €1.520
   });
+
+  it("zonder urenschatting → CROW-terugval mét waarschuwingsvlag", () => {
+    expect(result.flags.some((f) => f.includes("Urenschatting ontbreekt"))).toBe(true);
+  });
+});
+
+describe("applyPricingMethod — uren met AI-urenschatting (A1)", () => {
+  const result = applyPricingMethod(expand, "uren", {
+    ...baseConfig,
+    estimated_hours: 25.5,
+  });
+
+  it("gebruikt de geschatte uren i.p.v. de CROW-norm: 25,5 u → 4 dagen → 32 u × €85 = €2.720", () => {
+    const arbeid = result.lines.find((l) => l.line_type === "arbeid")!;
+    expect(arbeid.quantity).toBe(32); // ceil(25.5/8) = 4 dagen × 8 u
+    expect(arbeid.total_cents).toBe(272000);
+    expect(arbeid.description).toContain("4 dagen");
+    expect(arbeid.description).toContain("32 uur");
+  });
+
+  it("geeft géén terugval-vlag als de urenschatting aanwezig is", () => {
+    expect(result.flags.some((f) => f.includes("Urenschatting ontbreekt"))).toBe(false);
+  });
+
+  it("laat materiaalregels ongemoeid (identiek aan uitgesplitst)", () => {
+    const uitgesplitst = applyPricingMethod(expand, "uitgesplitst", baseConfig);
+    const materiaalUren = result.lines.filter((l) => l.line_type === "materiaal");
+    const materiaalB = uitgesplitst.lines.filter((l) => l.line_type === "materiaal");
+    expect(materiaalUren).toEqual(materiaalB);
+  });
 });

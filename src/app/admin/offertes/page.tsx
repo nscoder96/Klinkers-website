@@ -145,7 +145,7 @@ export default function OffertesPage() {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Offertes</h1>
             <p className="text-slate-500">Beheer je uitstaande offertes en maak nieuwe aan.</p>
           </div>
-          <Link href="/admin/offertes/nieuw-v2">
+          <Link href="/admin/offertes/nieuw">
             <Button className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 transition-all hover:-translate-y-0.5">
               <Plus className="w-4 h-4 mr-2" />
               Nieuwe Offerte

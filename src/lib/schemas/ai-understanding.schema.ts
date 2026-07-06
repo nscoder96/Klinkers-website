@@ -92,6 +92,13 @@ export const ActivitySchema = z.object({
     .describe(
       "true als er GEEN lengte/breedte beschikbaar zijn voor dit bestratings-, pad-, terras- of opritonderdeel. false of weggelaten als afmetingen wel aanwezig zijn."
     ),
+  estimated_hours: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      "Geschatte arbeidsuren voor deze activiteit door een 2-mans koppel, berekend via de urennormen in de prompt (som van alle werkonderdelen: afgraven, zandbed, leggen, aantrillen, voegen, opsluitbanden). ALLEEN invullen als de afmetingen bekend zijn; bij missing_dimensions: true weglaten. GEEN prijzen — alleen uren."
+    ),
 });
 
 /**

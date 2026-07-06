@@ -157,6 +157,60 @@ Maak ALLEEN een aparte activiteit bij:
 Forfaitaire extra's (kolkaansluiting, drainagegoot) mogen een eigen activiteit
 zijn met categorie 'overig'.
 
+## Urenraming per activiteit (2-mans koppel, professioneel)
+Schat per activiteit het totaal aantal arbeidsuren (estimated_hours) voor een
+2-mans koppel. Tel ALLE werkonderdelen van de activiteit bij elkaar op
+(afgraven + zandbed + leggen + aantrillen + voegen + opsluitbanden).
+Gebruik deze normen als basis:
+
+**Herstraten/herleggen:**
+- Klinkers herstraten: 1.0 uur per 10m²
+- Tegels herstraten: 0.75 uur per 10m²
+- Kleine formaten (mozaïek, kasseien): 2.0 uur per 10m²
+
+**Nieuw straatwerk:**
+- Klinkers nieuw leggen (incl. zandbed): 1.5 uur per 10m²
+- Tegels nieuw leggen (incl. zandbed): 1.25 uur per 10m²
+- Oprit klinkers aanleggen: 2.0 uur per 10m²
+
+**Grondwerk:**
+- Grond afgraven (10-20cm): 0.5 uur per 10m²
+- Grond afvoeren (met kraan): meegerekend in afgraven
+- Ophogen/aanvullen zand: 0.5 uur per 10m²
+- Aantrillen: 0.3 uur per 10m²
+
+**Opsluitbanden:**
+- Opsluitbanden plaatsen: 1.0 uur per 10 meter
+
+**Schutting/erfafscheiding:**
+- Betonpalen zetten: 1.5 uur per 10 palen
+- Schuttingdelen plaatsen: 0.5 uur per meter
+- Schutting compleet: 1.0 uur per meter
+
+**Gazon:**
+- Graszoden leggen: 0.5 uur per 10m²
+- Grond voorbereiden voor gazon: 0.75 uur per 10m²
+
+**Beplanting:**
+- Struiken planten (klein): 0.5 uur per 5 stuks
+- Struiken planten (groot): 0.5 uur per stuk
+- Border aanleggen: 1.0 uur per 5m²
+
+**Vlonders:**
+- Composiet vlonder plaatsen: 1.5 uur per 5m²
+- Houten vlonder plaatsen: 1.0 uur per 5m²
+- Fundering vlonder (steunpunten): 1.0 uur per 5 punten
+
+**Demontage/verwijdering:**
+- Schutting slopen: 0.5 uur per meter
+- Bestrating uitbreken + afvoeren: 0.5 uur per 10m²
+- Boom rooien (klein): 1.0 uur per stuk
+
+Regels voor de urenraming:
+- ALLEEN uren schatten als de afmetingen bekend zijn; bij missing_dimensions:
+  true laat je estimated_hours WEG.
+- GEEN prijzen, tarieven of euro-bedragen — alleen uren.
+
 ## KRITIEK — Gouda/eigenaar-specifieke extractie (afgraafdiepte + zanddikte)
 De eigenaar werkt in Gouda (veengrond) en noteert ZELF of er afgegraven moet
 worden en hoeveel cm zand erop moet.

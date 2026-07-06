@@ -46,6 +46,11 @@ export interface PricingMethodConfig {
   day_rounding?: "ceil" | "round" | "floor";
   /** CROW-dagproductie omgerekend naar m²/uur (default 5 = 40 m²/dag ÷ 8u). */
   crow_m2_per_hour?: number;
+  /**
+   * AI-geschatte arbeidsuren voor deze activiteit (Laag 1, 2-mans koppel).
+   * Aanwezig → gebruikt als urenbasis; afwezig → CROW-terugval mét vlag.
+   */
+  estimated_hours?: number;
 }
 
 const MANUAL_FLAG = "Bevat een post zonder prijs — controleer handmatig vóór verzenden";
@@ -84,14 +89,25 @@ function toAllIn(expand: ExpandResult, config: PricingMethodConfig): MethodLine[
   ];
 }
 
-/** Methode C: arbeidregels vervangen door één uren-regel (CROW + dagafronding). */
-function toHours(expand: ExpandResult, config: PricingMethodConfig): MethodLine[] {
+const HOURS_FALLBACK_FLAG =
+  "Urenschatting ontbreekt — arbeid geschat via CROW-norm, controleer de uren";
+
+/**
+ * Methode C: arbeidregels vervangen door één uren-regel (dagafronding).
+ * Urenbasis: de AI-schatting per activiteit (A1); zonder schatting valt de
+ * berekening terug op de CROW-norm en krijgt de offerte een waarschuwingsvlag.
+ */
+function toHours(
+  expand: ExpandResult,
+  config: PricingMethodConfig
+): { lines: MethodLine[]; flags: string[] } {
   const nonLabor = expand.lines.filter((l) => l.line_type !== "arbeid");
   const laborLines = expand.lines.filter((l) => l.line_type === "arbeid");
-  if (laborLines.length === 0) return asMethodLines(expand.lines);
+  if (laborLines.length === 0) return { lines: asMethodLines(expand.lines), flags: [] };
 
+  const hasEstimate = config.estimated_hours != null && config.estimated_hours > 0;
   const crow = config.crow_m2_per_hour ?? 5;
-  const totalHours = config.area_m2 / crow;
+  const totalHours = hasEstimate ? config.estimated_hours! : config.area_m2 / crow;
   // Alleen ingevulde waarden doorgeven: expliciete `undefined` zou de defaults
   // in calculateFromHours (spread-merge) overschrijven.
   const hoursConfig: Parameters<typeof calculateFromHours>[1] = {};
@@ -114,7 +130,10 @@ function toHours(expand: ExpandResult, config: PricingMethodConfig): MethodLine[
     flags: laborFlags,
   };
 
-  return [...asMethodLines(nonLabor), laborLine];
+  return {
+    lines: [...asMethodLines(nonLabor), laborLine],
+    flags: hasEstimate ? [] : [HOURS_FALLBACK_FLAG],
+  };
 }
 
 function dedupeFlags(flags: string[]): string[] {
@@ -138,7 +157,9 @@ export function applyPricingMethod(
       return { method, lines: asMethodLines(expand.lines), flags: expand.flags };
     case "meterprijs":
       return { method, lines: toAllIn(expand, config), flags: expand.flags };
-    case "uren":
-      return { method, lines: toHours(expand, config), flags: expand.flags };
+    case "uren": {
+      const hours = toHours(expand, config);
+      return { method, lines: hours.lines, flags: [...expand.flags, ...hours.flags] };
+    }
   }
 }

@@ -25,6 +25,16 @@ describe("consolidatePavingActivities", () => {
     expect(result[0].zanddikte_cm).toBe(10);
   });
 
+  it("telt de uren van ingevouwen grondwerk op bij de bestrating-aanleg (A1)", () => {
+    const result = consolidatePavingActivities([
+      act({ type: "grondwerk", action: "nieuw", description: "Afgraven cunet", area_m2: 70, afgraafdiepte_cm: 20, estimated_hours: 4 }),
+      act({ type: "bestrating", action: "nieuw", description: "Oprit klinkers", area_m2: 70, zanddikte_cm: 10, estimated_hours: 20 }),
+    ]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].estimated_hours).toBe(24);
+  });
+
   it("gooit een losse opsluitband-activiteit zonder oppervlak weg", () => {
     const result = consolidatePavingActivities([
       act({ type: "bestrating", action: "nieuw", description: "Oprit klinkers", area_m2: 70 }),
