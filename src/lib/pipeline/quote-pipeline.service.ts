@@ -138,6 +138,25 @@ function processActivity(
     };
   }
 
+  // C2.2: zonder bruikbare afmeting valt er niets te rekenen. Geen regels met
+  // hoeveelheid 0 genereren (stille gok) — hard flaggen, blocking.
+  if (!hasUsableDimension(activity, assembly.unit)) {
+    return {
+      activity,
+      assembly,
+      expand: null,
+      display: null,
+      structured: null,
+      flags: [
+        makeFlag(
+          "MISSING_DIMENSIONS",
+          `Geen bruikbare afmeting voor "${activity.description}" — vul oppervlakte of lengte aan`
+        ),
+      ],
+      unmatched: false,
+    };
+  }
+
   const withComponents = assemblies.find((a) => a.id === assembly.id)!;
 
   const expand = expandAssembly(
@@ -203,6 +222,22 @@ function collectSectionFlags(
 }
 
 const dedupe = dedupeQuoteFlags;
+
+/**
+ * Of de activiteit een afmeting heeft waar de assembly mee kan rekenen (C2.2):
+ * m²-werk vereist een oppervlak, m¹-werk een lengte (of AI-berekende
+ * opsluitingslengte), stuks-werk heeft geen afmeting nodig.
+ */
+function hasUsableDimension(activity: PipelineActivity, assemblyUnit: string): boolean {
+  if (activity.area_m2 > 0) return true;
+  if (
+    assemblyUnit === "m1" &&
+    ((activity.opsluiting_lengte_m ?? 0) > 0 || (activity.length_m ?? 0) > 0)
+  ) {
+    return true;
+  }
+  return assemblyUnit === "stuk";
+}
 
 /** Uren-regel van Methode C (arbeid in uren; rauwe sectie-uren). */
 function isUrenLine(l: MethodLine): boolean {

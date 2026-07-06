@@ -84,6 +84,53 @@ const verwijderen: AssemblyWithComponents = {
 
 const ASSEMBLIES = [bestratingNieuw, herstraten, verwijderen];
 
+describe("runQuotePipeline — C2.2: MISSING_DIMENSIONS", () => {
+  it("maatgevoelige activiteit zonder afmetingen → blocking flag, geen regels (geen gok)", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "nieuw",
+          description: "Oprit klinkers",
+          area_m2: 0,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+
+    const section = result.sections[0];
+    expect(section.unmatched).toBe(false);
+    // Geen regels met hoeveelheid 0 genereren — er valt niets te rekenen.
+    expect(section.expand).toBeNull();
+    expect(section.display).toBeNull();
+
+    const flag = result.flags.find((f) => f.code === "MISSING_DIMENSIONS");
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe("blocking");
+    expect(result.hasBlockingFlags).toBe(true);
+  });
+
+  it("activiteit mét oppervlak krijgt geen MISSING_DIMENSIONS", () => {
+    const result = runQuotePipeline(
+      [
+        {
+          type: "bestrating",
+          action: "herstraten",
+          description: "Terras herstraten",
+          area_m2: 24,
+        },
+      ],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_DIMENSIONS")).toBe(false);
+    expect(result.sections[0].expand).not.toBeNull();
+  });
+});
+
 describe("runQuotePipeline — meerdere activiteiten", () => {
   it("Test 1: nieuwe oprit met aantekeningen → geen Gouda-vlaggen, container = 2", () => {
     const result = runQuotePipeline(

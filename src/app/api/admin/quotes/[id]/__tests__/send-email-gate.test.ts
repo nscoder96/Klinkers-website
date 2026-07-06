@@ -121,6 +121,26 @@ describe("send-email route — blocking-gate (C2.1)", () => {
     expect(db.captured.quoteUpdates[0]).toMatchObject({ status: "sent" });
   });
 
+  it("MISSING_DIMENSIONS (C2.2) blokkeert het verzenden via de gate", async () => {
+    db.run = {
+      id: "run-1",
+      flags: [
+        {
+          code: "MISSING_DIMENSIONS",
+          severity: "blocking",
+          message: 'Geen bruikbare afmeting voor "Oprit klinkers"',
+        },
+      ],
+    };
+
+    const res = await POST(makeRequest(), { params });
+    const body = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(JSON.stringify(body.blockingFlags)).toContain("MISSING_DIMENSIONS");
+    expect(db.captured.quoteUpdates).toHaveLength(0);
+  });
+
   it("geen blocking flags (alleen warning) → verzenden loopt door", async () => {
     db.run = {
       id: "run-1",
