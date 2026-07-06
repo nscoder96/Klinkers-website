@@ -152,18 +152,6 @@ function processActivity(
     pricingDb
   );
 
-  // Granulaire regels → BTW per regel toekennen (deze sessie alles 21%).
-  const structureLines: StructureLine[] = expand.lines.map((l) => ({
-    ...l,
-    vat_pct: config.vat_pct ?? 21,
-  }));
-
-  const structured = structureQuote({
-    lines: structureLines,
-    layout: config.layout,
-    action: activity.action,
-  });
-
   const display = applyPricingMethod(expand, config.method, {
     area_m2: activity.area_m2,
     assemblyLabel: activity.description,
@@ -173,18 +161,43 @@ function processActivity(
     estimated_hours: activity.estimated_hours,
   });
 
-  // Specifieke per-regel vlaggen (bv. "Geen prijs gevonden voor X") ophalen
-  // zodat de gebruiker in de Let op-lijst ziet WELKE post een prijs mist.
-  // Methode-vlaggen (bv. uren-terugval) tellen ook mee.
-  const lineFlags = expand.lines.flatMap((l) => l.flags);
-  const flags = dedupe([
-    ...lineFlags,
-    ...expand.flags,
-    ...display.flags,
-    ...structured.flags,
-  ]);
+  // Bron voor totalen + 55/35/10-check (Laag 4): de regels zoals ze op de
+  // offerte komen. Bij 'uren' zijn dat de methode-regels (arbeid in uren) —
+  // anders rekent de sanity-check op iets anders dan wat de klant ziet. Bij
+  // 'uitgesplitst' identiek aan de expansie; bij 'meterprijs' blijft de
+  // expansie de juiste decompositie van de all-in post.
+  const structureSource = config.method === "uren" ? display.lines : expand.lines;
+  const structured = structureQuote({
+    lines: toStructureLines(structureSource, config),
+    layout: config.layout,
+    action: activity.action,
+  });
+
+  const flags = collectSectionFlags(expand, display, structured);
 
   return { activity, assembly, expand, display, structured, flags, unmatched: false };
+}
+
+/** Regels → structure-regels met BTW per regel (deze sessie alles 21%). */
+function toStructureLines(
+  lines: MethodLine[],
+  config: PipelineConfig
+): StructureLine[] {
+  return lines.map((l) => ({ ...l, vat_pct: config.vat_pct ?? 21 }));
+}
+
+/**
+ * Alle vlaggen van één sectie: per-regel (bv. "Geen prijs gevonden voor X",
+ * zodat de gebruiker ziet WELKE post een prijs mist), expansie-, methode-
+ * (bv. uren-terugval) en structuring-vlaggen (verdeling, ontbrekende prijs).
+ */
+function collectSectionFlags(
+  expand: ExpandResult,
+  display: MethodResult,
+  structured: StructuredQuote
+): string[] {
+  const lineFlags = expand.lines.flatMap((l) => l.flags);
+  return dedupe([...lineFlags, ...expand.flags, ...display.flags, ...structured.flags]);
 }
 
 function dedupe(flags: string[]): string[] {
@@ -245,14 +258,31 @@ function applyQuoteDayRounding(
     flags: [],
   };
 
-  return sections.map((s, i) =>
-    i !== lastIdx
-      ? s
-      : {
-          ...s,
-          display: { ...s.display!, lines: [...s.display!.lines, roundingLine] },
-        }
-  );
+  return sections.map((s, i) => {
+    if (i !== lastIdx) return s;
+    const display = { ...s.display!, lines: [...s.display!.lines, roundingLine] };
+    // Totalen opnieuw berekenen mét de dagafronding, maar de 55/35/10-
+    // beoordeling van de sectie zélf (distribution + vlaggen) houden op de
+    // eigen werkmix: de afronding is offerte-overhead en zou anders een valse
+    // sectie-waarschuwing geven. Het offerteniveau (combined) rekent wél
+    // inclusief afronding via de breakdown.
+    const withRounding = structureQuote({
+      lines: toStructureLines(display.lines, config),
+      layout: config.layout,
+      action: s.activity.action,
+    });
+    const structured = {
+      ...withRounding,
+      distribution: s.structured!.distribution,
+      flags: s.structured!.flags,
+    };
+    return {
+      ...s,
+      display,
+      structured,
+      flags: collectSectionFlags(s.expand!, display, structured),
+    };
+  });
 }
 
 /**

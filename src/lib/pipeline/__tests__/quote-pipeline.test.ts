@@ -223,8 +223,11 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
       r.sections[0].display!.lines.filter((l) => l.line_type !== "arbeid");
     expect(nietArbeid(uren)).toEqual(nietArbeid(uitgesplitst));
 
-    // Flags zijn identiek (urenschatting aanwezig → geen terugval-vlag).
-    expect(uren.flags).toEqual(uitgesplitst.flags);
+    // Extractie-/prijsvlaggen identiek; verdelingswaarschuwingen (55/35/10)
+    // mogen verschillen omdat de arbeidsopbouw bewust verschilt.
+    const zonderVerdeling = (flags: string[]) =>
+      flags.filter((f) => !f.includes("— controleer de berekening"));
+    expect(zonderVerdeling(uren.flags)).toEqual(zonderVerdeling(uitgesplitst.flags));
     expect(uren.hasBlockingFlags).toBe(uitgesplitst.hasBlockingFlags);
 
     // Arbeid verschilt bewust qua opbouw: rauwe uren-regel + één dagafronding.
@@ -237,8 +240,24 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     const somUren = arbeidUren.reduce((acc, l) => acc + l.quantity, 0);
     expect(somUren).toBe(32);
 
-    // Totalen in dezelfde orde: de structurele breakdown is methode-onafhankelijk.
-    expect(uren.combined.breakdown).toEqual(uitgesplitst.combined.breakdown);
+    // Materiaal/materieel identiek in de totalen; arbeid blijft in dezelfde orde.
+    expect(uren.combined.breakdown.subtotal_materials).toBe(
+      uitgesplitst.combined.breakdown.subtotal_materials
+    );
+    expect(uren.combined.breakdown.subtotal_materieel).toBe(
+      uitgesplitst.combined.breakdown.subtotal_materieel
+    );
+    const ratio =
+      uren.combined.breakdown.grand_total / uitgesplitst.combined.breakdown.grand_total;
+    expect(ratio).toBeGreaterThan(0.5);
+    expect(ratio).toBeLessThan(2);
+
+    // Totalen en 55/35/10-check rekenen op de offerte-regels zelf: de
+    // breakdown volgt exact wat er op de offerte staat, ook de arbeid in uren.
+    const displaySom = uren.sections[0]
+      .display!.lines.reduce((acc, l) => acc + (l.total_cents ?? 0), 0);
+    expect(uren.combined.breakdown.subtotal).toBe(displaySom);
+    expect(uren.combined.breakdown.subtotal_labor).toBe(272000); // 32 u × €85
   });
 
   it("dagafronding geldt één keer over het offertetotaal, niet per sectie (3 × 2,5 u → 1 dag) (A1)", () => {
@@ -271,6 +290,24 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     expect(totaalUren).toBe(8);
     const totaalCents = arbeid.reduce((acc, l) => acc + (l.total_cents ?? 0), 0);
     expect(totaalCents).toBe(68000);
+
+    // De 55/35/10-check en combined-totalen rekenen op de offerte-regels
+    // (incl. dagafronding), niet op de interne per-m²-decompositie.
+    expect(result.combined.breakdown.subtotal_labor).toBe(68000);
+    const somRegels = result.sections
+      .flatMap((s) => s.display!.lines)
+      .reduce((acc, l) => acc + (l.total_cents ?? 0), 0);
+    expect(result.combined.breakdown.subtotal).toBe(somRegels);
+
+    // De dagafronding telt mee in de totalen van de laatste sectie, maar
+    // vertekent de sectie-verdeling niet: drie identieke secties houden een
+    // identieke 55/35/10-beoordeling (de afronding is offerte-overhead).
+    const [s1, , s3] = result.sections;
+    expect(s3.structured!.breakdown.subtotal_labor).toBe(
+      s1.structured!.breakdown.subtotal_labor + 4250 // + 0,5 u × €85
+    );
+    expect(s3.structured!.distribution).toEqual(s1.structured!.distribution);
+    expect(s3.flags).toEqual(s1.flags);
   });
 
   it("uren-methode zonder urenschatting → terugval-vlag zichtbaar op de sectie (A1)", () => {
