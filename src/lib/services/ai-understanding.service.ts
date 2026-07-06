@@ -20,6 +20,17 @@ import {
 import { TOP_20_RULES_FOR_PROMPT } from "../rules/garden-element-rules";
 
 /**
+ * Promptversie (B2). Hoog dit op bij ELKE inhoudelijke wijziging van de
+ * prompt of het outputschema — de versie wordt met elke generation run
+ * meegelogd in `quote_generation_runs`, zodat leerdata herleidbaar blijft
+ * naar de promptvariant die hem produceerde.
+ */
+export const PROMPT_VERSION = "2026-07-06.1";
+
+/** Expliciet gepind model voor Laag 1 — wordt per generation run meegelogd. */
+export const UNDERSTANDING_MODEL = "claude-sonnet-4-6";
+
+/**
  * System prompt for the AI Understanding service.
  *
  * Key characteristics:
@@ -249,7 +260,7 @@ export async function analyzeNotes(
   const client = new Anthropic();
 
   const response = await client.beta.messages.parse({
-    model: "claude-sonnet-4-6",
+    model: UNDERSTANDING_MODEL,
     max_tokens: 2000,
     betas: ["structured-outputs-2025-11-13"],
     system: UNDERSTANDING_PROMPT,
