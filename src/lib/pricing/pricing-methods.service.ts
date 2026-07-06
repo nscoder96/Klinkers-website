@@ -5,7 +5,8 @@
  *   - 'uitgesplitst' (B): arbeid- en materiaalregels apart, ongewijzigd.
  *   - 'meterprijs'   (A): alle geprijsde regels samengevoegd tot één all-in regel
  *                         (aanneemsom per m²/m¹).
- *   - 'uren'         (C): arbeidregels vervangen door één uren-regel (CROW-norm),
+ *   - 'uren'         (C): arbeidregels vervangen door één uren-regel (rauwe
+ *                         uren; dagafronding gebeurt op offerteniveau),
  *                         materiaal/materieel blijft staan.
  *
  * Puur: geen DB, geen mutatie. Geld altijd in centen (zie money.ts). Genereert
@@ -13,8 +14,7 @@
  */
 
 import type { ExpandResult, ExpandedLine } from "../assembly/assembly-expansion.service";
-import { sumCents, toCents, Cents } from "../money";
-import { calculateFromHours } from "../services/hours-pricing.service";
+import { sumCents, toCents, multiplyCents, Cents } from "../money";
 
 export type PriceMethod = "uitgesplitst" | "meterprijs" | "uren";
 
@@ -92,10 +92,15 @@ function toAllIn(expand: ExpandResult, config: PricingMethodConfig): MethodLine[
 const HOURS_FALLBACK_FLAG =
   "Urenschatting ontbreekt — arbeid geschat via CROW-norm, controleer de uren";
 
+/** Uurtarief excl. BTW als er geen instelling is (koppelprijs eigenaar). */
+const DEFAULT_HOURLY_RATE = 85;
+
 /**
- * Methode C: arbeidregels vervangen door één uren-regel (dagafronding).
- * Urenbasis: de AI-schatting per activiteit (A1); zonder schatting valt de
- * berekening terug op de CROW-norm en krijgt de offerte een waarschuwingsvlag.
+ * Methode C: arbeidregels vervangen door één uren-regel met de RAUWE uren van
+ * deze sectie. Urenbasis: de AI-schatting per activiteit (A1); zonder schatting
+ * valt de berekening terug op de CROW-norm en krijgt de offerte een
+ * waarschuwingsvlag. De dagafronding gebeurt bewust NIET hier maar één keer
+ * over het offertetotaal, in runQuotePipeline — vaste werking.
  */
 function toHours(
   expand: ExpandResult,
@@ -107,24 +112,19 @@ function toHours(
 
   const hasEstimate = config.estimated_hours != null && config.estimated_hours > 0;
   const crow = config.crow_m2_per_hour ?? 5;
-  const totalHours = hasEstimate ? config.estimated_hours! : config.area_m2 / crow;
-  // Alleen ingevulde waarden doorgeven: expliciete `undefined` zou de defaults
-  // in calculateFromHours (spread-merge) overschrijven.
-  const hoursConfig: Parameters<typeof calculateFromHours>[1] = {};
-  if (config.hourly_rate != null) hoursConfig.hourly_rate = config.hourly_rate;
-  if (config.min_hours_per_day != null) hoursConfig.min_hours_per_day = config.min_hours_per_day;
-  if (config.day_rounding != null) hoursConfig.day_rounding = config.day_rounding;
-  const hours = calculateFromHours(totalHours, hoursConfig);
+  const rawHours = hasEstimate ? config.estimated_hours! : config.area_m2 / crow;
+  const hours = Math.round(rawHours * 100) / 100;
+  const rateCents = toCents(config.hourly_rate ?? DEFAULT_HOURLY_RATE);
 
   const laborFlags = dedupeFlags(laborLines.flatMap((l) => l.flags));
 
   const laborLine: MethodLine = {
-    description: `Arbeid (${hours.days} ${hours.days === 1 ? "dag" : "dagen"} · ${hours.billable_hours} uur)`,
+    description: `Arbeid (${hours} uur)`,
     line_type: "arbeid",
-    quantity: hours.billable_hours,
+    quantity: hours,
     unit: "uur",
-    unit_price_cents: toCents(hours.hourly_rate),
-    total_cents: toCents(hours.labor_cost),
+    unit_price_cents: rateCents,
+    total_cents: multiplyCents(rateCents, hours),
     pricing_id: null,
     price_source: "database",
     flags: laborFlags,

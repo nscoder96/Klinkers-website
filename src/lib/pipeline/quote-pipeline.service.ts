@@ -23,9 +23,12 @@ import {
 } from "../assembly/assembly-expansion.service";
 import {
   applyPricingMethod,
+  type MethodLine,
   type MethodResult,
   type PriceMethod,
 } from "../pricing/pricing-methods.service";
+import { calculateFromHours } from "../services/hours-pricing.service";
+import { toCents, multiplyCents } from "../money";
 import {
   structureQuote,
   addBreakdowns,
@@ -188,6 +191,70 @@ function dedupe(flags: string[]): string[] {
   return [...new Set(flags)];
 }
 
+/** Uren-regel van Methode C (arbeid in uren; rauwe sectie-uren). */
+function isUrenLine(l: MethodLine): boolean {
+  return l.line_type === "arbeid" && l.unit === "uur";
+}
+
+/**
+ * Dagafronding voor methode 'uren' — vaste werking: één keer over het
+ * offertetotaal, niet per sectie. Telt de rauwe uren van alle secties op,
+ * rondt af op hele werkdagen (calculateFromHours) en voegt het verschil als
+ * expliciete dagafrondingsregel toe aan de laatste sectie met arbeid, zodat
+ * de som van de regels exact het afgeronde totaal is.
+ */
+function applyQuoteDayRounding(
+  sections: PipelineSection[],
+  config: PipelineConfig
+): PipelineSection[] {
+  const rawTotal = sections.reduce(
+    (acc, s) =>
+      acc +
+      (s.display?.lines.filter(isUrenLine).reduce((a, l) => a + l.quantity, 0) ?? 0),
+    0
+  );
+  if (rawTotal <= 0) return sections;
+
+  // Alleen ingevulde waarden doorgeven: expliciete `undefined` zou de defaults
+  // in calculateFromHours (spread-merge) overschrijven.
+  const hoursConfig: Parameters<typeof calculateFromHours>[1] = {};
+  if (config.hourly_rate != null) hoursConfig.hourly_rate = config.hourly_rate;
+  if (config.min_hours_per_day != null) hoursConfig.min_hours_per_day = config.min_hours_per_day;
+  if (config.day_rounding != null) hoursConfig.day_rounding = config.day_rounding;
+  const rounded = calculateFromHours(rawTotal, hoursConfig);
+
+  const delta = Math.round((rounded.billable_hours - rawTotal) * 100) / 100;
+  if (delta <= 0) return sections;
+
+  let lastIdx = -1;
+  for (const [i, s] of sections.entries()) {
+    if (s.display?.lines.some(isUrenLine)) lastIdx = i;
+  }
+  if (lastIdx < 0) return sections;
+
+  const rateCents = toCents(rounded.hourly_rate);
+  const roundingLine: MethodLine = {
+    description: `Dagafronding hele werkdagen (${rounded.days} ${rounded.days === 1 ? "dag" : "dagen"} · ${rounded.billable_hours} uur totaal)`,
+    line_type: "arbeid",
+    quantity: delta,
+    unit: "uur",
+    unit_price_cents: rateCents,
+    total_cents: multiplyCents(rateCents, delta),
+    pricing_id: null,
+    price_source: "database",
+    flags: [],
+  };
+
+  return sections.map((s, i) =>
+    i !== lastIdx
+      ? s
+      : {
+          ...s,
+          display: { ...s.display!, lines: [...s.display!.lines, roundingLine] },
+        }
+  );
+}
+
 /**
  * Draait de volledige pipeline over alle activiteiten en aggregeert de totalen.
  *
@@ -206,9 +273,13 @@ export function runQuotePipeline(
   // vóór de firing — repareert hoe de AI realistische input opsplitst.
   const consolidated = consolidatePavingActivities(activities);
 
-  const sections = consolidated.map((a) =>
+  const processed = consolidated.map((a) =>
     processActivity(a, assemblies, pricingDb, config)
   );
+
+  // Methode 'uren': dagafronding één keer over het offertetotaal (vaste werking).
+  const sections =
+    config.method === "uren" ? applyQuoteDayRounding(processed, config) : processed;
 
   const combinedBreakdown = sections.reduce(
     (acc, s) => (s.structured ? addBreakdowns(acc, s.structured.breakdown) : acc),

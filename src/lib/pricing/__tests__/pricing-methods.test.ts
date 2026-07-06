@@ -112,23 +112,19 @@ describe("applyPricingMethod — uren × uurtarief (Methode C)", () => {
     expect(arbeid).toHaveLength(1);
   });
 
-  it("70 m² / 5 = 14 u → ceil(14/8) = 2 dagen → 16 u × €85 = €1.360", () => {
+  it("CROW-terugval geeft rauwe uren: 70 m² / 5 = 14 u × €85 = €1.190 (dagafronding is offerteniveau)", () => {
     const arbeid = result.lines.find((l) => l.line_type === "arbeid")!;
-    expect(arbeid.total_cents).toBe(136000);
-    expect(fromCents(arbeid.total_cents!)).toBe(1360);
-    expect(arbeid.quantity).toBe(16); // factureerbare uren
-  });
-
-  it("toont dagen en uren in de omschrijving", () => {
-    const arbeid = result.lines.find((l) => l.line_type === "arbeid")!;
-    expect(arbeid.description).toContain("2 dag");
-    expect(arbeid.description).toContain("16 uur");
+    expect(arbeid.quantity).toBe(14); // rauwe uren, niet per sectie afgerond
+    expect(arbeid.unit).toBe("uur");
+    expect(arbeid.total_cents).toBe(119000);
+    expect(fromCents(arbeid.total_cents!)).toBe(1190);
+    expect(arbeid.description).toContain("14 uur");
   });
 
   it("respecteert een afwijkend uurtarief", () => {
     const dearder = applyPricingMethod(expand, "uren", { ...baseConfig, hourly_rate: 95 });
     const arbeid = dearder.lines.find((l) => l.line_type === "arbeid")!;
-    expect(arbeid.total_cents).toBe(16 * 95 * 100); // €1.520
+    expect(arbeid.total_cents).toBe(14 * 95 * 100); // €1.330
   });
 
   it("zonder urenschatting → CROW-terugval mét waarschuwingsvlag", () => {
@@ -142,12 +138,11 @@ describe("applyPricingMethod — uren met AI-urenschatting (A1)", () => {
     estimated_hours: 25.5,
   });
 
-  it("gebruikt de geschatte uren i.p.v. de CROW-norm: 25,5 u → 4 dagen → 32 u × €85 = €2.720", () => {
+  it("gebruikt de geschatte uren ongerond: 25,5 u × €85 = €2.167,50", () => {
     const arbeid = result.lines.find((l) => l.line_type === "arbeid")!;
-    expect(arbeid.quantity).toBe(32); // ceil(25.5/8) = 4 dagen × 8 u
-    expect(arbeid.total_cents).toBe(272000);
-    expect(arbeid.description).toContain("4 dagen");
-    expect(arbeid.description).toContain("32 uur");
+    expect(arbeid.quantity).toBe(25.5); // rauwe AI-schatting; dagafronding op offerteniveau
+    expect(arbeid.total_cents).toBe(216750);
+    expect(arbeid.description).toContain("25.5 uur");
   });
 
   it("geeft géén terugval-vlag als de urenschatting aanwezig is", () => {

@@ -18,6 +18,8 @@ De AI-laag genereert nooit prijzen of hoeveelheden die niet in de notities staan
 
 Maak `/api/admin/quote/generate-v2` het enige generatiepad. Integreer de uren-prijsmethode uit `hours-pricing.service.ts` als volwaardige `method: "uren"` binnen de pipeline, zodat de functionaliteit van de analyze-v2 flow (uren per werkitem, dagafronding) beschikbaar is via de pipeline-config. De v2-urenschatting per werkitem wordt input voor de arbeidregels, geen parallel systeem.
 
+Vaste werking (geen instelling): dagafronding bij methode uren gebeurt één keer over het offertetotaal — eerst alle uren van alle secties optellen, dan afronden op hele werkdagen; het verschil staat als aparte dagafrondingsregel op de laatste sectie met arbeid. En `persistQuote` berekent offerte- en sectietotalen uit dezelfde regels die als line-items opgeslagen worden, zodat het opgeslagen totaal bij elke methode exact de som van de opgeslagen regels is.
+
 Acceptatie: de UI op `/admin/offertes/nieuw` roept alleen nog `generate-v2` aan. Een testnotitie levert via beide prijsmethodes (uitgesplitst en uren) een consistente offerte: identieke materiaalregels en flags, en totale kosten in dezelfde orde. De arbeidsregel zelf verschilt bewust qua opbouw (uren rekent via uren × tarief × dagafronding, uitgesplitst per m²) — forceer geen kunstmatige gelijkheid tussen de twee arbeidsopbouwen. Verificatie: `npx vitest run` groen plus een handmatige rooktest met drie voorbeeldnotities.
 
 ### Taak A2: Dode routes verwijderen

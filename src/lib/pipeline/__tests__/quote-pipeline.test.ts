@@ -227,14 +227,50 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     expect(uren.flags).toEqual(uitgesplitst.flags);
     expect(uren.hasBlockingFlags).toBe(uitgesplitst.hasBlockingFlags);
 
-    // Arbeid verschilt bewust qua opbouw: uren-methode = één regel in uren.
+    // Arbeid verschilt bewust qua opbouw: rauwe uren-regel + één dagafronding.
     const arbeidUren = uren.sections[0].display!.lines.filter((l) => l.line_type === "arbeid");
-    expect(arbeidUren).toHaveLength(1);
+    expect(arbeidUren).toHaveLength(2);
     expect(arbeidUren[0].unit).toBe("uur");
-    expect(arbeidUren[0].quantity).toBe(32); // ceil(25.5/8) = 4 dagen × 8 u
+    expect(arbeidUren[0].quantity).toBe(25.5); // rauwe AI-schatting
+    expect(arbeidUren[1].description).toContain("Dagafronding");
+    expect(arbeidUren[1].quantity).toBe(6.5); // ceil(25.5/8) = 4 dagen × 8 u − 25.5 u
+    const somUren = arbeidUren.reduce((acc, l) => acc + l.quantity, 0);
+    expect(somUren).toBe(32);
 
     // Totalen in dezelfde orde: de structurele breakdown is methode-onafhankelijk.
     expect(uren.combined.breakdown).toEqual(uitgesplitst.combined.breakdown);
+  });
+
+  it("dagafronding geldt één keer over het offertetotaal, niet per sectie (3 × 2,5 u → 1 dag) (A1)", () => {
+    const terras = (name: string) => ({
+      type: "bestrating",
+      action: "herstraten",
+      description: name,
+      area_m2: 20,
+      estimated_hours: 2.5,
+    });
+    const result = runQuotePipeline(
+      [terras("Terras A"), terras("Pad B"), terras("Oprit C")],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uren", layout: "uitgesplitst" }
+    );
+
+    const arbeid = result.sections.flatMap((s) =>
+      s.display!.lines.filter((l) => l.line_type === "arbeid")
+    );
+    // Drie rauwe uren-regels + één dagafrondingsregel — géén drie losse afrondingen.
+    expect(arbeid).toHaveLength(4);
+    const afronding = arbeid.filter((l) => l.description.includes("Dagafronding"));
+    expect(afronding).toHaveLength(1);
+    expect(afronding[0].quantity).toBe(0.5); // 8 u (1 dag) − 7,5 u geschat
+
+    // Totaal: ceil(7,5/8) = 1 dag = 8 u × €85 = €680.
+    // Per sectie afronden zou 3 × 8 u = 24 u = €2.040 geven.
+    const totaalUren = arbeid.reduce((acc, l) => acc + l.quantity, 0);
+    expect(totaalUren).toBe(8);
+    const totaalCents = arbeid.reduce((acc, l) => acc + (l.total_cents ?? 0), 0);
+    expect(totaalCents).toBe(68000);
   });
 
   it("uren-methode zonder urenschatting → terugval-vlag zichtbaar op de sectie (A1)", () => {

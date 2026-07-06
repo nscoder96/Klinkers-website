@@ -11,8 +11,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toLineItemInserts } from "../pricing/quote-snapshot.service";
-import { fromCents } from "../money";
-import type { PipelineResult } from "./quote-pipeline.service";
+import { fromCents, sumCents, Cents } from "../money";
+import type { PipelineResult, PipelineSection } from "./quote-pipeline.service";
 
 /** BTW Hoog 21% — zie tax_rates seed. */
 const TAX_RATE_21_ID = "b63dbcd0-e69d-4281-94f7-7bb5458ed770";
@@ -33,6 +33,16 @@ export interface PersistResult {
   quoteNumber: string;
   sectionsCreated: number;
   lineItemsCreated: number;
+}
+
+/**
+ * Sectie-subtotaal in centen uit de DISPLAY-regels — dezelfde bron als de
+ * regels die naar `quote_line_items` gaan. Zo is het opgeslagen totaal altijd
+ * exact de som van de opgeslagen regels, ook bij methode 'uren' waar de
+ * weergaveregels afwijken van de expand-regels (A1).
+ */
+function sectionSubtotalCents(section: PipelineSection): Cents {
+  return sumCents(section.display?.lines.map((l) => l.total_cents ?? 0) ?? []);
 }
 
 /** Genereert het volgende offertenummer (OFF-YYYY-NNN). */
@@ -68,10 +78,13 @@ export async function persistQuote(
   const year = parseInt(todayIso.slice(0, 4), 10);
   const validUntil = addDays(todayIso, opts.validityDays ?? 30);
 
-  const { breakdown } = pipeline.combined;
-  const subtotal = fromCents(breakdown.subtotal);
-  const btwAmount = fromCents(breakdown.vat_9_amount + breakdown.vat_21_amount);
-  const total = fromCents(breakdown.grand_total);
+  // Totalen uit de display-regels (de bron van de line-items), niet uit de
+  // methode-onafhankelijke expand-breakdown — die twee verschillen bij 'uren'.
+  const subtotalCents = sumCents(pipeline.sections.map(sectionSubtotalCents));
+  const btwCents = Math.round(subtotalCents * 0.21);
+  const subtotal = fromCents(subtotalCents);
+  const btwAmount = fromCents(btwCents);
+  const total = fromCents(subtotalCents + btwCents);
 
   const quoteNumber = await nextQuoteNumber(supabase, year);
 
@@ -111,7 +124,7 @@ export async function persistQuote(
         quote_id: quote.id,
         title: section.activity.description,
         display_order: index,
-        subtotal: fromCents(section.structured?.breakdown.subtotal ?? 0),
+        subtotal: fromCents(sectionSubtotalCents(section)),
       })
       .select("id")
       .single();
