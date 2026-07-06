@@ -14,6 +14,7 @@ import { useAdminAuth } from '@/lib/useAdminAuth';
 import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Save } from 'lucide-react';
 import { SectionDndList } from './SectionDndList';
 import type { EditableLine, EditableSection } from './types';
+import type { QuoteFlag } from '@/lib/quote-flags';
 
 // --- API response types ---
 
@@ -45,7 +46,7 @@ interface Section {
   display_lines: DisplayLine[];
   breakdown: Breakdown | null;
   distribution: Distribution | null;
-  flags: string[];
+  flags: QuoteFlag[];
 }
 interface Activity {
   type: string;
@@ -60,7 +61,7 @@ interface PipelineResponse {
   pipeline: {
     sections: Section[];
     combined: { breakdown: Breakdown; distribution: Distribution };
-    flags: string[];
+    flags: QuoteFlag[];
     hasBlockingFlags: boolean;
   };
 }
@@ -357,9 +358,21 @@ export default function NieuwV2Page() {
                   Let op bij de offerte
                 </p>
                 {result.pipeline.flags.map((f, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm text-amber-900">
+                  <div
+                    key={i}
+                    className={`flex items-start gap-2 text-sm ${
+                      f.severity === 'blocking' ? 'text-red-800' : 'text-amber-900'
+                    }`}
+                  >
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>{f}</span>
+                    <span>
+                      {f.message}
+                      {f.severity === 'blocking' && (
+                        <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+                          blokkeert verzenden
+                        </span>
+                      )}
+                    </span>
                   </div>
                 ))}
               </div>

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { applyPricingMethod } from "../pricing-methods.service";
 import type { ExpandResult } from "../../assembly/assembly-expansion.service";
 import { fromCents } from "../../money";
+import { makeFlag } from "../../quote-flags";
 
 /**
  * Vereenvoudigde bestrating_nieuw-expansie (70 m²), conform de Fase 9-getallen.
@@ -30,7 +31,7 @@ const expand: ExpandResult = {
       total_cents: null,
       pricing_id: null,
       price_source: "missing",
-      flags: ["⚠️ Materiaalkeuze/prijs handmatig invullen"],
+      flags: [makeFlag("MISSING_PRICE", "Materiaalkeuze/prijs handmatig invullen")],
     },
     {
       description: "Legarbeid klinkers simpel (halfsteens)",
@@ -98,7 +99,7 @@ describe("applyPricingMethod — meterprijs/aanneemsom (Methode A)", () => {
   });
 
   it("markeert handmatig na te kijken omdat één regel geen prijs had", () => {
-    expect(result.lines[0].flags.some((f) => f.includes("handmatig"))).toBe(true);
+    expect(result.lines[0].flags.some((f) => f.code === "MISSING_PRICE")).toBe(true);
   });
 });
 
@@ -128,7 +129,7 @@ describe("applyPricingMethod — uren × uurtarief (Methode C)", () => {
   });
 
   it("zonder urenschatting → CROW-terugval mét waarschuwingsvlag", () => {
-    expect(result.flags.some((f) => f.includes("Urenschatting ontbreekt"))).toBe(true);
+    expect(result.flags.some((f) => f.code === "MISSING_HOURS_ESTIMATE")).toBe(true);
   });
 });
 
@@ -146,7 +147,7 @@ describe("applyPricingMethod — uren met AI-urenschatting (A1)", () => {
   });
 
   it("geeft géén terugval-vlag als de urenschatting aanwezig is", () => {
-    expect(result.flags.some((f) => f.includes("Urenschatting ontbreekt"))).toBe(false);
+    expect(result.flags.some((f) => f.code === "MISSING_HOURS_ESTIMATE")).toBe(false);
   });
 
   it("laat materiaalregels ongemoeid (identiek aan uitgesplitst)", () => {

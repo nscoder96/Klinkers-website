@@ -89,8 +89,9 @@ run("Fase 9 — end-to-end tegen live DB", () => {
     const sec = result.sections[0];
     expect(sec.assembly?.name).toBe("bestrating_nieuw");
     // Geen Gouda-vlaggen want diepte + zand opgegeven.
-    expect(result.flags.join(" ")).not.toContain("Afgraafdiepte niet opgegeven");
-    expect(result.flags.join(" ")).not.toContain("Zanddikte niet opgegeven");
+    const teksten = result.flags.map((f) => f.message).join(" ");
+    expect(teksten).not.toContain("Afgraafdiepte niet opgegeven");
+    expect(teksten).not.toContain("Zanddikte niet opgegeven");
     // Container = 2 (14 m³ × 1.25 / 10 → ceil = 2).
     const container = sec.expand!.lines.find((l) => l.description.includes("Container"));
     expect(container?.quantity).toBe(2);

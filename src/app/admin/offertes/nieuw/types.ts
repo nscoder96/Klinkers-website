@@ -1,3 +1,5 @@
+import type { QuoteFlag } from '@/lib/quote-flags';
+
 export interface EditableLine {
   id: string;
   description: string;
@@ -10,7 +12,7 @@ export interface EditableLine {
 export interface EditableSection {
   id: string;
   title: string;
-  flags: string[];
+  flags: QuoteFlag[];
   unmatched: boolean;
   lines: EditableLine[];
 }

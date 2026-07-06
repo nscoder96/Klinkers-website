@@ -15,6 +15,7 @@
 
 import { evaluateAssemblyFormula, AssemblyVars } from "./formula-evaluator";
 import { toCents, multiplyCents, Cents } from "../money";
+import { makeFlag, type QuoteFlag } from "../quote-flags";
 
 export interface AssemblyComponent {
   item_name_match: string | null;
@@ -67,13 +68,13 @@ export interface ExpandedLine {
   total_cents: Cents | null;
   pricing_id: string | null;
   price_source: "database" | "missing";
-  flags: string[];
+  flags: QuoteFlag[];
 }
 
 export interface ExpandResult {
   lines: ExpandedLine[];
   /** Offerte-brede vlaggen (bv. ontbrekende afgraafdiepte/zanddikte). */
-  flags: string[];
+  flags: QuoteFlag[];
 }
 
 const MIN_ZANDDIKTE_CM = 8;
@@ -185,7 +186,7 @@ export function expandAssembly(
     cunet_m3: cunet,
   };
 
-  const quoteFlags: string[] = [];
+  const quoteFlags: QuoteFlag[] = [];
 
   const lines: ExpandedLine[] = [];
 
@@ -217,7 +218,7 @@ export function expandAssembly(
       ? evaluateAssemblyFormula(c.quantity_formula, vars)
       : area * (c.quantity_per_unit ?? 1);
 
-    const lineFlags: string[] = [];
+    const lineFlags: QuoteFlag[] = [];
 
     // Prijs opzoeken (geen match-naam = handmatige keuze nodig).
     // Een lege match op de hoofd-materiaalregel (oppervlakteformule, niet de
@@ -260,9 +261,12 @@ export function expandAssembly(
 
     if (priceSource === "missing") {
       lineFlags.push(
-        resolvedName
-          ? `Geen prijs gevonden voor "${resolvedName}" — vul handmatig in`
-          : "Materiaalkeuze/prijs handmatig invullen"
+        makeFlag(
+          "MISSING_PRICE",
+          resolvedName
+            ? `Geen prijs gevonden voor "${resolvedName}" — vul handmatig in`
+            : "Materiaalkeuze/prijs handmatig invullen"
+        )
       );
     }
 

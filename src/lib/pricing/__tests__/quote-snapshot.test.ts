@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { makeFlag } from "../../quote-flags";
 import { toLineItemInserts } from "../quote-snapshot.service";
 import type { MethodLine } from "../pricing-methods.service";
 
@@ -23,7 +24,7 @@ const lines: MethodLine[] = [
     total_cents: null,
     pricing_id: null,
     price_source: "missing",
-    flags: ["⚠️ Materiaalkeuze/prijs handmatig invullen"],
+    flags: [makeFlag("MISSING_PRICE", "Materiaalkeuze/prijs handmatig invullen")],
   },
   {
     description: "Legarbeid klinkers simpel (halfsteens)",

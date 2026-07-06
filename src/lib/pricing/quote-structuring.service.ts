@@ -15,6 +15,7 @@
 
 import type { MethodLine } from "./pricing-methods.service";
 import { sumCents, pctOfCents, Cents } from "../money";
+import { makeFlag, type QuoteFlag } from "../quote-flags";
 
 /** Regel die de structuring binnenkomt: een methode-regel + optioneel BTW-tarief. */
 export interface StructureLine extends MethodLine {
@@ -53,7 +54,7 @@ export interface StructuredQuote {
   display_lines: MethodLine[];
   breakdown: TotalsBreakdown;
   distribution: CostDistribution;
-  flags: string[];
+  flags: QuoteFlag[];
 }
 
 export interface StructureInput {
@@ -246,8 +247,10 @@ function applyLayout(lines: StructureLine[], layout: LayoutOption): MethodLine[]
   ];
 }
 
-const MISSING_PRICE_FLAG =
-  "Bevat een post zonder prijs — controleer handmatig vóór verzenden";
+const MISSING_PRICE_FLAG = makeFlag(
+  "MISSING_PRICE",
+  "Bevat een post zonder prijs — controleer handmatig vóór verzenden"
+);
 
 /**
  * Structureert geprijsde regels tot een offerte met totalen-breakdown,
@@ -267,9 +270,11 @@ export function structureQuote(input: StructureInput): StructuredQuote {
   const distribution = computeDistribution(breakdown);
   const display_lines = applyLayout(lines, layout);
 
-  const flags: string[] = [];
+  const flags: QuoteFlag[] = [];
   if (lines.some((l) => l.total_cents == null)) flags.push(MISSING_PRICE_FLAG);
-  flags.push(...distribution.warnings);
+  flags.push(
+    ...distribution.warnings.map((w) => makeFlag("DISTRIBUTION_OUT_OF_NORM", w))
+  );
 
   return { layout, display_lines, breakdown, distribution, flags };
 }

@@ -233,9 +233,14 @@ function SortableSectionV2({
           style={{ borderBottom: '1px solid #fef3c7', background: '#fffbeb' }}
         >
           {section.flags.map((f, i) => (
-            <p key={i} className="flex items-start gap-1.5 text-xs text-amber-800">
+            <p
+              key={i}
+              className={`flex items-start gap-1.5 text-xs ${
+                f.severity === 'blocking' ? 'text-red-700' : 'text-amber-800'
+              }`}
+            >
               <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
-              {f}
+              {f.message}
             </p>
           ))}
         </div>

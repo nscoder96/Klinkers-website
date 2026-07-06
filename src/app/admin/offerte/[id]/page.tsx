@@ -736,7 +736,13 @@ export default function OfferteMaker() {
       if (response.ok) {
         const data = await response.json();
         setAiAnalysis(data.ai?.summary || '');
-        setAiSuggestions(data.pipeline?.flags || []);
+        // Vlaggen zijn objecten { code, severity, message } (A3) — toon de tekst.
+        setAiSuggestions(
+          (data.pipeline?.flags || []).map(
+            (f: { severity: string; message: string }) =>
+              f.severity === 'blocking' ? `⛔ ${f.message}` : f.message
+          )
+        );
 
         if (data.ai?.summary) {
           setProjectDescription(data.ai.summary);

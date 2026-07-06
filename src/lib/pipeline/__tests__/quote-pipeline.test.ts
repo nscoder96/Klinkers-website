@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import { runQuotePipeline } from "../quote-pipeline.service";
 import type { AssemblyWithComponents } from "../../assembly/assembly-loader";
 import type { PricingRow } from "../../assembly/assembly-expansion.service";
+import type { QuoteFlag } from "../../quote-flags";
 
 // ── Fixtures (subset van de seed, genoeg om de pipeline te valideren) ──────────
 
@@ -107,8 +108,9 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     const section = result.sections[0];
     expect(section.unmatched).toBe(false);
     // Geen ontbrekende Gouda-info → geen afgraaf/zand-vlaggen.
-    expect(result.flags.join(" ")).not.toContain("Afgraafdiepte niet opgegeven");
-    expect(result.flags.join(" ")).not.toContain("Zanddikte niet opgegeven");
+    const teksten = result.flags.map((f) => f.message).join(" ");
+    expect(teksten).not.toContain("Afgraafdiepte niet opgegeven");
+    expect(teksten).not.toContain("Zanddikte niet opgegeven");
     // Container: ceil(14 m³ × 1.25 / 10) = 2.
     const container = section.expand!.lines.find((l) => l.description.includes("Container"));
     expect(container!.quantity).toBe(2);
@@ -133,7 +135,7 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
       { method: "uitgesplitst", layout: "uitgesplitst" }
     );
 
-    const flags = result.flags.join(" ");
+    const flags = result.flags.map((f) => f.message).join(" ");
     expect(flags).not.toContain("Afgraafdiepte niet opgegeven");
     expect(flags).not.toContain("Zanddikte niet opgegeven");
   });
@@ -225,8 +227,8 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
 
     // Extractie-/prijsvlaggen identiek; verdelingswaarschuwingen (55/35/10)
     // mogen verschillen omdat de arbeidsopbouw bewust verschilt.
-    const zonderVerdeling = (flags: string[]) =>
-      flags.filter((f) => !f.includes("— controleer de berekening"));
+    const zonderVerdeling = (flags: QuoteFlag[]) =>
+      flags.filter((f) => f.code !== "DISTRIBUTION_OUT_OF_NORM");
     expect(zonderVerdeling(uren.flags)).toEqual(zonderVerdeling(uitgesplitst.flags));
     expect(uren.hasBlockingFlags).toBe(uitgesplitst.hasBlockingFlags);
 
@@ -355,9 +357,33 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
       PRICING,
       { method: "uren", layout: "uitgesplitst" }
     );
-    expect(result.flags.some((f) => f.includes("Urenschatting ontbreekt"))).toBe(true);
+    expect(result.flags.some((f) => f.code === "MISSING_HOURS_ESTIMATE")).toBe(true);
     // De terugval is een waarschuwing, geen blokkade.
     expect(result.hasBlockingFlags).toBe(false);
+  });
+
+  it("UNMATCHED_ACTIVITY is blocking: geen template → niet verstuurbaar (A3)", () => {
+    const result = runQuotePipeline(
+      [{ type: "verlichting", action: "nieuw", description: "Tuinverlichting", area_m2: 0 }],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags[0].code).toBe("UNMATCHED_ACTIVITY");
+    expect(result.flags[0].severity).toBe("blocking");
+    expect(result.hasBlockingFlags).toBe(true);
+  });
+
+  it("MISSING_PRICE is blocking: hoofdmateriaal zonder prijsmatch → niet verstuurbaar (A3)", () => {
+    // Geen materialPreference → hoofd-materiaalregel blijft 'missing'.
+    const result = runQuotePipeline(
+      [{ type: "bestrating", action: "nieuw", description: "Oprit", area_m2: 70, afgraafdiepte_cm: 20, zanddikte_cm: 10 }],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_PRICE")).toBe(true);
+    expect(result.hasBlockingFlags).toBe(true);
   });
 
   it("combineert breakdowns over secties (grand_total = som)", () => {

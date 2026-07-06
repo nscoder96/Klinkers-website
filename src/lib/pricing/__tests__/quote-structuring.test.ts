@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { makeFlag } from "../../quote-flags";
 import {
   structureQuote,
   HerstratenMaterialError,
@@ -95,14 +96,14 @@ describe("structureQuote — totals breakdown (Deel B4)", () => {
         total_cents: null,
         pricing_id: null,
         price_source: "missing",
-        flags: ["⚠️ Geen prijs gevonden"],
+        flags: [makeFlag("MISSING_PRICE", "Geen prijs gevonden")],
       },
     ];
 
     const { breakdown, flags } = structureQuote({ lines });
 
     expect(breakdown.subtotal).toBe(toCents(500));
-    expect(flags.some((f) => f.includes("zonder prijs"))).toBe(true);
+    expect(flags.some((f) => f.code === "MISSING_PRICE")).toBe(true);
   });
 });
 

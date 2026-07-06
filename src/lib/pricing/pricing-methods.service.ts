@@ -16,6 +16,11 @@
 import type { ExpandResult, ExpandedLine } from "../assembly/assembly-expansion.service";
 import { sumCents, toCents, multiplyCents, Cents } from "../money";
 import { formatAantal } from "../format";
+import {
+  makeFlag,
+  dedupeQuoteFlags,
+  type QuoteFlag,
+} from "../quote-flags";
 
 export type PriceMethod = "uitgesplitst" | "meterprijs" | "uren";
 
@@ -31,7 +36,7 @@ export interface MethodResult {
   method: PriceMethod;
   lines: MethodLine[];
   /** Offerte-brede vlaggen, overgenomen uit de expansie. */
-  flags: string[];
+  flags: QuoteFlag[];
 }
 
 export interface PricingMethodConfig {
@@ -54,7 +59,10 @@ export interface PricingMethodConfig {
   estimated_hours?: number;
 }
 
-const MANUAL_FLAG = "Bevat een post zonder prijs — controleer handmatig vóór verzenden";
+const MANUAL_FLAG = makeFlag(
+  "MISSING_PRICE",
+  "Bevat een post zonder prijs — controleer handmatig vóór verzenden"
+);
 
 /** Methode B: regels ongewijzigd doorzetten. */
 function asMethodLines(lines: ExpandedLine[]): MethodLine[] {
@@ -90,8 +98,10 @@ function toAllIn(expand: ExpandResult, config: PricingMethodConfig): MethodLine[
   ];
 }
 
-const HOURS_FALLBACK_FLAG =
-  "Urenschatting ontbreekt — arbeid geschat via CROW-norm, controleer de uren";
+const HOURS_FALLBACK_FLAG = makeFlag(
+  "MISSING_HOURS_ESTIMATE",
+  "Urenschatting ontbreekt — arbeid geschat via CROW-norm, controleer de uren"
+);
 
 /** Uurtarief excl. BTW als er geen instelling is (koppelprijs eigenaar). */
 const DEFAULT_HOURLY_RATE = 85;
@@ -106,7 +116,7 @@ const DEFAULT_HOURLY_RATE = 85;
 function toHours(
   expand: ExpandResult,
   config: PricingMethodConfig
-): { lines: MethodLine[]; flags: string[] } {
+): { lines: MethodLine[]; flags: QuoteFlag[] } {
   const nonLabor = expand.lines.filter((l) => l.line_type !== "arbeid");
   const laborLines = expand.lines.filter((l) => l.line_type === "arbeid");
   if (laborLines.length === 0) return { lines: asMethodLines(expand.lines), flags: [] };
@@ -137,9 +147,7 @@ function toHours(
   };
 }
 
-function dedupeFlags(flags: string[]): string[] {
-  return [...new Set(flags)];
-}
+const dedupeFlags = dedupeQuoteFlags;
 
 /**
  * Past een prijsmethode toe op een assembly-expansie.

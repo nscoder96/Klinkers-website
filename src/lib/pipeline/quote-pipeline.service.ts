@@ -31,6 +31,12 @@ import { calculateFromHours } from "../services/hours-pricing.service";
 import { toCents, multiplyCents } from "../money";
 import { formatAantal } from "../format";
 import {
+  makeFlag,
+  dedupeQuoteFlags,
+  hasBlockingFlags as hasBlockingQuoteFlags,
+  type QuoteFlag,
+} from "../quote-flags";
+import {
   structureQuote,
   addBreakdowns,
   distributionFromBreakdown,
@@ -87,7 +93,7 @@ export interface PipelineSection {
   display: MethodResult | null;
   /** Totalen + verdeling + layout (Laag 4). Null als niets vuurde. */
   structured: StructuredQuote | null;
-  flags: string[];
+  flags: QuoteFlag[];
   /** Geen assembly gevuurd → activiteit valt terug op handmatige afhandeling. */
   unmatched: boolean;
 }
@@ -97,23 +103,13 @@ export interface PipelineResult {
   /** Offerte-brede totalen + verdeling over alle secties. */
   combined: { breakdown: TotalsBreakdown; distribution: CostDistribution };
   /** Alle gededupliceerde vlaggen over de hele offerte. */
-  flags: string[];
+  flags: QuoteFlag[];
   /**
-   * Of er blokkerende vlaggen zijn (Gouda-info ontbreekt of een prijs mist) —
-   * de offerte mag dan aangemaakt worden maar niet verstuurd (Test 1b).
+   * Of er blokkerende vlaggen zijn (severity 'blocking', bv. ontbrekende
+   * prijs) — de offerte mag dan aangemaakt worden maar niet verstuurd.
+   * Bepaald door severity per code (A3), nooit door de berichttekst.
    */
   hasBlockingFlags: boolean;
-}
-
-const BLOCKING_FLAG_MARKERS = [
-  "Afgraafdiepte niet opgegeven",
-  "Zanddikte niet opgegeven",
-  "Geen prijs gevonden",
-  "handmatig",
-];
-
-function isBlocking(flag: string): boolean {
-  return BLOCKING_FLAG_MARKERS.some((m) => flag.includes(m));
 }
 
 /** Verwerkt één activiteit door de hele keten. */
@@ -132,7 +128,12 @@ function processActivity(
       expand: null,
       display: null,
       structured: null,
-      flags: [`Geen werk-template voor "${activity.description}" — handmatig opbouwen`],
+      flags: [
+        makeFlag(
+          "UNMATCHED_ACTIVITY",
+          `Geen werk-template voor "${activity.description}" — handmatig opbouwen`
+        ),
+      ],
       unmatched: true,
     };
   }
@@ -196,14 +197,12 @@ function collectSectionFlags(
   expand: ExpandResult,
   display: MethodResult,
   structured: StructuredQuote
-): string[] {
+): QuoteFlag[] {
   const lineFlags = expand.lines.flatMap((l) => l.flags);
   return dedupe([...lineFlags, ...expand.flags, ...display.flags, ...structured.flags]);
 }
 
-function dedupe(flags: string[]): string[] {
-  return [...new Set(flags)];
-}
+const dedupe = dedupeQuoteFlags;
 
 /** Uren-regel van Methode C (arbeid in uren; rauwe sectie-uren). */
 function isUrenLine(l: MethodLine): boolean {
@@ -326,6 +325,6 @@ export function runQuotePipeline(
       distribution: distributionFromBreakdown(combinedBreakdown),
     },
     flags,
-    hasBlockingFlags: flags.some(isBlocking),
+    hasBlockingFlags: hasBlockingQuoteFlags(flags),
   };
 }

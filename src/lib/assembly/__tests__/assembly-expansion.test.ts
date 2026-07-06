@@ -47,7 +47,7 @@ describe("expandAssembly — Test 1: oprit 5×14m, afgraven 20cm, zandbed 10cm",
     )!;
     expect(klinkers.quantity).toBeCloseTo(73.5, 3);
     expect(klinkers.price_source).toBe("missing");
-    expect(klinkers.flags.some((f) => f.includes("handmatig"))).toBe(true);
+    expect(klinkers.flags.some((f) => f.code === "MISSING_PRICE")).toBe(true);
   });
 
   it("opsluitband = 41,8 m¹ à €11 = €459,80", () => {
