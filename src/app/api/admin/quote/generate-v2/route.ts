@@ -9,7 +9,6 @@
  */
 
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { analyzeNotes } from "@/lib/services/ai-understanding.service";
 import { toPipelineActivities } from "@/lib/pipeline/activity-mapper";
 import { loadActiveAssemblies } from "@/lib/assembly/assembly-loader";
@@ -19,6 +18,7 @@ import {
   type PipelineConfig,
 } from "@/lib/pipeline/quote-pipeline.service";
 import { persistQuote } from "@/lib/pipeline/quote-persistence.service";
+import { ensureLead } from "@/lib/pipeline/ensure-lead";
 import { createServerClient } from "@/lib/supabase/client";
 import type { PriceMethod } from "@/lib/pricing/pricing-methods.service";
 import type { LayoutOption } from "@/lib/pricing/quote-structuring.service";
@@ -167,62 +167,6 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-interface LeadInput {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-}
-
-/**
- * Zorgt dat er een lead bestaat voor de opgegeven klantgegevens en geeft de
- * lead-id terug. Zonder naam → geen lead (geeft null). Hergebruikt een
- * bestaande lead bij een match op e-mail of telefoon om duplicaten te voorkomen.
- */
-async function ensureLead(
-  supabase: SupabaseClient,
-  input: LeadInput
-): Promise<string | null> {
-  if (!input.name) return null;
-
-  // Bestaande lead zoeken op e-mail of telefoon (duplicaat-preventie).
-  const orFilters = [
-    input.email ? `email.eq.${input.email}` : null,
-    input.phone ? `phone.eq.${input.phone}` : null,
-  ].filter(Boolean) as string[];
-
-  if (orFilters.length > 0) {
-    const { data: existing } = await supabase
-      .from("leads")
-      .select("id")
-      .or(orFilters.join(","))
-      .limit(1)
-      .maybeSingle();
-
-    if (existing?.id) return existing.id as string;
-  }
-
-  const { data: newLead, error: leadError } = await supabase
-    .from("leads")
-    .insert({
-      name: input.name,
-      phone: input.phone || null,
-      email: input.email || null,
-      address: input.address || null,
-      city: "",
-      source: "other",
-      status: "new",
-    })
-    .select("id")
-    .single();
-
-  if (leadError || !newLead) {
-    throw new Error(`Kon klant niet aanmaken: ${leadError?.message ?? "onbekend"}`);
-  }
-
-  return newLead.id as string;
 }
 
 function pickMethod(override: unknown, fromSettings: unknown): PriceMethod {
