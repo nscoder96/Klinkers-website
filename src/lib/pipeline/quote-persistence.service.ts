@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toLineItemInserts } from "../pricing/quote-snapshot.service";
 import { fromCents, sumCents, Cents } from "../money";
 import type { PipelineResult, PipelineSection } from "./quote-pipeline.service";
+import type { QuoteLineSnapshot } from "./quote-corrections.service";
 
 /** BTW Hoog 21% — zie tax_rates seed. */
 const TAX_RATE_21_ID = "b63dbcd0-e69d-4281-94f7-7bb5458ed770";
@@ -33,6 +34,11 @@ export interface PersistResult {
   quoteNumber: string;
   sectionsCreated: number;
   lineItemsCreated: number;
+  /**
+   * De aangemaakte regels mét rij-ids — snapshot voor `generated_lines` in
+   * quote_generation_runs, zodat de verzendflow kan diffen (B3).
+   */
+  lineItems: QuoteLineSnapshot[];
 }
 
 /**
@@ -114,6 +120,7 @@ export async function persistQuote(
   let sectionsCreated = 0;
   let lineItemsCreated = 0;
   let displayOrder = 0;
+  const createdLineItems: QuoteLineSnapshot[] = [];
 
   for (const [index, section] of pipeline.sections.entries()) {
     if (!section.display) continue; // unmatched → geen sectie
@@ -144,30 +151,36 @@ export async function persistQuote(
     displayOrder += inserts.length;
 
     if (inserts.length > 0) {
-      const { error: liErr } = await supabase.from("quote_line_items").insert(
-        inserts.map((i) => ({
-          section_id: i.section_id,
-          pricing_id: i.pricing_id,
-          description: i.description,
-          description_snapshot: i.description_snapshot,
-          quantity: i.quantity,
-          unit: i.unit,
-          unit_price: i.unit_price ?? 0,
-          unit_price_snapshot: i.unit_price_snapshot,
-          total_price: i.total_price ?? 0,
-          line_type: i.line_type,
-          assembly_id: i.assembly_id,
-          tax_rate_id: i.tax_rate_id,
-          vat_rate: i.vat_rate,
-          is_visible_on_pdf: i.is_visible_on_pdf,
-          is_auto_calculated: i.is_auto_calculated,
-          display_order: i.display_order,
-        }))
-      );
+      // .select() geeft de aangemaakte rijen mét id terug — de snapshot
+      // waartegen de verzendflow correcties dift (B3).
+      const { data: createdRows, error: liErr } = await supabase
+        .from("quote_line_items")
+        .insert(
+          inserts.map((i) => ({
+            section_id: i.section_id,
+            pricing_id: i.pricing_id,
+            description: i.description,
+            description_snapshot: i.description_snapshot,
+            quantity: i.quantity,
+            unit: i.unit,
+            unit_price: i.unit_price ?? 0,
+            unit_price_snapshot: i.unit_price_snapshot,
+            total_price: i.total_price ?? 0,
+            line_type: i.line_type,
+            assembly_id: i.assembly_id,
+            tax_rate_id: i.tax_rate_id,
+            vat_rate: i.vat_rate,
+            is_visible_on_pdf: i.is_visible_on_pdf,
+            is_auto_calculated: i.is_auto_calculated,
+            display_order: i.display_order,
+          }))
+        )
+        .select("id, description, quantity, unit, unit_price, line_type, section_id");
 
       if (liErr) {
         throw new Error(`Kon offerteregels niet aanmaken: ${liErr.message}`);
       }
+      createdLineItems.push(...((createdRows ?? []) as QuoteLineSnapshot[]));
       lineItemsCreated += inserts.length;
     }
   }
@@ -177,6 +190,7 @@ export async function persistQuote(
     quoteNumber: quote.quote_number,
     sectionsCreated,
     lineItemsCreated,
+    lineItems: createdLineItems,
   };
 }
 

@@ -71,6 +71,7 @@ interface Captured {
  */
 function fakeSupabase(captured: Captured): SupabaseClient {
   let sectionSeq = 0;
+  let lineSeq = 0;
 
   const from = (table: string) => {
     let inserted: unknown = null;
@@ -79,8 +80,15 @@ function fakeSupabase(captured: Captured): SupabaseClient {
       insert(payload: unknown) {
         inserted = payload;
         if (table === "quote_line_items") {
-          captured.lineItems.push(...(payload as LineItemInsert[]));
-          return { error: null };
+          const rows = payload as LineItemInsert[];
+          captured.lineItems.push(...rows);
+          // .insert(...).select(...) geeft de aangemaakte rijen mét id terug.
+          return {
+            select: () => ({
+              data: rows.map((r) => ({ ...r, id: `li-${++lineSeq}` })),
+              error: null,
+            }),
+          };
         }
         return builder;
       },

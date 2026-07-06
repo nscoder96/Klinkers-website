@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createServerClient } from '@/lib/supabase/client';
+import { recordQuoteCorrections } from '@/lib/pipeline/quote-corrections.service';
 
 // Lazy initialize Resend to avoid build-time errors
 let resend: Resend | null = null;
@@ -151,6 +152,9 @@ export async function POST(
       console.log('Resend API key not configured, simulating send...');
       console.log('Would send to:', quote.leads.email);
 
+      // B3: correcties vastleggen op het moment van verzenden (niet-blokkerend).
+      await recordQuoteCorrections(supabase, quoteId);
+
       await supabase
         .from('quotes')
         .update({ status: 'sent', sent_at: new Date().toISOString() })
@@ -181,6 +185,9 @@ export async function POST(
       console.error('Email error:', emailError);
       return NextResponse.json({ error: 'Email verzenden mislukt: ' + emailError.message }, { status: 500 });
     }
+
+    // B3: correcties vastleggen op het moment van verzenden (niet-blokkerend).
+    await recordQuoteCorrections(supabase, quoteId);
 
     // Update quote status to sent
     await supabase

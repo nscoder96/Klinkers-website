@@ -25,6 +25,11 @@ export interface GenerationRunInput {
   /** De gebruikte PipelineConfig. */
   config: unknown;
   duration_ms: number;
+  /**
+   * Snapshot van de gepersisteerde regels mét rij-ids (B3) — null bij een
+   * run zonder persist. Bron voor de correctie-diff bij verzenden.
+   */
+  generated_lines?: unknown;
 }
 
 /**
@@ -48,6 +53,7 @@ export async function logGenerationRun(
         flags: run.flags,
         config: run.config,
         duration_ms: run.duration_ms,
+        generated_lines: run.generated_lines ?? null,
       })
       .select("id")
       .single();

@@ -160,6 +160,7 @@ export async function POST(request: Request) {
       flags: pipeline.flags,
       config,
       duration_ms: Date.now() - startedAt,
+      generated_lines: persistence?.lineItems ?? null,
     });
 
     return NextResponse.json({
