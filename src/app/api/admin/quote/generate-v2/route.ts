@@ -9,7 +9,12 @@
  */
 
 import { NextResponse } from "next/server";
-import { analyzeNotes } from "@/lib/services/ai-understanding.service";
+import {
+  analyzeNotes,
+  PROMPT_VERSION,
+  UNDERSTANDING_MODEL,
+} from "@/lib/services/ai-understanding.service";
+import { logGenerationRun } from "@/lib/pipeline/generation-log.service";
 import { toPipelineActivities } from "@/lib/pipeline/activity-mapper";
 import { loadActiveAssemblies } from "@/lib/assembly/assembly-loader";
 import { loadActivePricing } from "@/lib/pipeline/pricing-loader";
@@ -41,6 +46,7 @@ function formatSectionTitle(
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   try {
     const body = await request.json();
     const {
@@ -73,19 +79,9 @@ export async function POST(request: Request) {
 
     // Laag 1: AI Understanding
     const aiResult = await analyzeNotes(notes.trim());
-    if (aiResult.activities.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Geen werkzaamheden gedetecteerd in de notities",
-          suggestion: "Voeg afmetingen of materialen toe.",
-        },
-        { status: 422 }
-      );
-    }
 
-    const activities = toPipelineActivities(aiResult.activities);
-
-    // Instellingen + overrides
+    // Instellingen + overrides (vóór de 422-check, zodat elke run — ook één
+    // zonder gedetecteerde werkzaamheden — met config gelogd kan worden, B1).
     const { data: settings } = await supabase
       .from("quote_settings")
       .select(
@@ -102,6 +98,29 @@ export async function POST(request: Request) {
       day_rounding: (settings?.day_rounding as PipelineConfig["day_rounding"]) ?? "ceil",
       vat_pct: 21,
     };
+
+    if (aiResult.activities.length === 0) {
+      await logGenerationRun(supabase, {
+        quote_id: null,
+        notes_raw: notes.trim(),
+        ai_output: aiResult,
+        model: UNDERSTANDING_MODEL,
+        prompt_version: PROMPT_VERSION,
+        confidence: aiResult.confidence ?? null,
+        flags: [],
+        config,
+        duration_ms: Date.now() - startedAt,
+      });
+      return NextResponse.json(
+        {
+          error: "Geen werkzaamheden gedetecteerd in de notities",
+          suggestion: "Voeg afmetingen of materialen toe.",
+        },
+        { status: 422 }
+      );
+    }
+
+    const activities = toPipelineActivities(aiResult.activities);
 
     // Laag 2–4: assemblies + pricing laden, pipeline draaien
     const [assemblies, pricing] = await Promise.all([
@@ -129,7 +148,22 @@ export async function POST(request: Request) {
       });
     }
 
+    // B1: elke generatie als één rij loggen (ook zonder persist).
+    // Niet-blokkerend — een mislukte logregel breekt de offertestroom niet.
+    const generationRunId = await logGenerationRun(supabase, {
+      quote_id: persistence?.quoteId ?? null,
+      notes_raw: notes.trim(),
+      ai_output: aiResult,
+      model: UNDERSTANDING_MODEL,
+      prompt_version: PROMPT_VERSION,
+      confidence: aiResult.confidence ?? null,
+      flags: pipeline.flags,
+      config,
+      duration_ms: Date.now() - startedAt,
+    });
+
     return NextResponse.json({
+      generationRunId,
       ai: {
         summary: aiResult.summary,
         confidence: aiResult.confidence,
