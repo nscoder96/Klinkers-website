@@ -6,6 +6,12 @@
  * bevries die als snapshot (in centen). Genereert NOOIT een prijs — geen
  * match = regel gemarkeerd als 'missing'.
  *
+ * Prijsmatching is exact-of-flag (C1): een component met `pricing_item_id`
+ * slaat naam-matching volledig over; een naam matcht alleen exact
+ * (case-insensitief, getrimd). Alleen de vrije materiaalvoorkeur van de klant
+ * loopt via token-overlap, met WEAK_MATERIAL_MATCH (warning) bij een zwakke
+ * match. Geen substring-gokken.
+ *
  * Afgeleide variabelen (lost spec-inconsistenties op, gedocumenteerd in
  * F5-IMPLEMENTATIE.md):
  *   - perimeter_m : exacte omtrek als L×B bekend, anders sqrt(area)*4 (schatting)
@@ -18,6 +24,8 @@ import { toCents, multiplyCents, Cents } from "../money";
 import { makeFlag, type QuoteFlag } from "../quote-flags";
 
 export interface AssemblyComponent {
+  /** Expliciete koppeling naar pricing.id — wint altijd van naam-matching. */
+  pricing_item_id?: string | null;
   item_name_match: string | null;
   component_type: "arbeid" | "materiaal" | "materieel";
   quantity_formula: string | null;
@@ -97,21 +105,17 @@ function unitPriceFor(
   return pricing.selling_price_min ?? pricing.selling_price_max ?? null;
 }
 
+/**
+ * Exacte naam-match (case-insensitief, getrimd) — niets anders. De vroegere
+ * substring-fallback is vervallen (C1): "Legarbeid klinkers simpel" mag nooit
+ * per ongeluk op "Legarbeid klinkers complex" landen. Geen match = MISSING_PRICE.
+ */
 function findPricing(
   itemNameMatch: string,
   pricingDb: PricingRow[]
 ): PricingRow | null {
   const needle = itemNameMatch.toLowerCase().trim();
-  // Exact op naam
-  const exact = pricingDb.find((p) => p.item_name.toLowerCase().trim() === needle);
-  if (exact) return exact;
-  // Gedeeltelijk: pricing-naam zit in de match of omgekeerd
-  const partial = pricingDb.find(
-    (p) =>
-      needle.includes(p.item_name.toLowerCase().trim()) ||
-      p.item_name.toLowerCase().trim().includes(needle)
-  );
-  return partial ?? null;
+  return pricingDb.find((p) => p.item_name.toLowerCase().trim() === needle) ?? null;
 }
 
 /** Betekenisvolle tokens (≥4 letters) uit een naam, voor token-overlap. */
@@ -125,14 +129,16 @@ function significantTokens(name: string): string[] {
 /**
  * Koppelt een vrije materiaalvoorkeur ("klinkers waalformaat antraciet") aan de
  * prijsbibliotheek via token-overlap. Kleur-/restwoorden (antraciet) tellen niet
- * mee omdat ze niet in de prijsnamen voorkomen. Null = geen voldoende match.
+ * mee omdat ze niet in de prijsnamen voorkomen. Null = geen enkele overlap.
+ * `weak` = minder dan twee overlappende significante tokens (en geen exacte
+ * naam-match) — de match wordt gebruikt maar krijgt WEAK_MATERIAL_MATCH.
  */
 function matchMaterialPreference(
   preference: string,
   pricingDb: PricingRow[]
-): PricingRow | null {
+): { row: PricingRow; weak: boolean } | null {
   const exact = findPricing(preference, pricingDb);
-  if (exact) return exact;
+  if (exact) return { row: exact, weak: false };
 
   const prefLower = preference.toLowerCase();
   let best: { row: PricingRow; score: number } | null = null;
@@ -144,7 +150,8 @@ function matchMaterialPreference(
       best = { row, score };
     }
   }
-  return best?.row ?? null;
+  if (!best) return null;
+  return { row: best.row, weak: best.score < 2 };
 }
 
 /**
@@ -220,20 +227,32 @@ export function expandAssembly(
 
     const lineFlags: QuoteFlag[] = [];
 
-    // Prijs opzoeken (geen match-naam = handmatige keuze nodig).
-    // Een lege match op de hoofd-materiaalregel (oppervlakteformule, niet de
-    // opsluitband op de omtrek) wordt opgelost via de materiaalvoorkeur.
+    // Prijs opzoeken, exact-of-flag (C1):
+    //   1. pricing_item_id → directe koppeling, naam-matching volledig overgeslagen;
+    //      een dode koppeling valt NIET terug op de naam (dat zou een stille gok zijn).
+    //   2. item_name_match → alleen exacte naam-match.
+    //   3. Lege match op de hoofd-materiaalregel (oppervlakteformule, niet de
+    //      opsluitband op de omtrek) → materiaalvoorkeur via token-overlap,
+    //      zwakke match krijgt een warning-flag.
     let pricing: PricingRow | null = null;
     let resolvedName: string | null = c.item_name_match;
-    if (c.item_name_match) {
+    let weakMaterialMatch = false;
+    if (c.pricing_item_id) {
+      pricing = pricingDb.find((p) => p.id === c.pricing_item_id) ?? null;
+      if (pricing) resolvedName = c.item_name_match ?? pricing.item_name;
+    } else if (c.item_name_match) {
       pricing = findPricing(c.item_name_match, pricingDb);
     } else if (
       c.component_type === "materiaal" &&
       input.materialPreference &&
       !c.quantity_formula?.includes("perimeter")
     ) {
-      pricing = matchMaterialPreference(input.materialPreference, pricingDb);
-      if (pricing) resolvedName = input.materialPreference;
+      const match = matchMaterialPreference(input.materialPreference, pricingDb);
+      if (match) {
+        pricing = match.row;
+        resolvedName = input.materialPreference;
+        weakMaterialMatch = match.weak;
+      }
     }
 
     // Hoeveelheid afronden: m³ (bulk/zand) altijd naar boven op halve kuip,
@@ -266,6 +285,13 @@ export function expandAssembly(
           resolvedName
             ? `Geen prijs gevonden voor "${resolvedName}" — vul handmatig in`
             : "Materiaalkeuze/prijs handmatig invullen"
+        )
+      );
+    } else if (weakMaterialMatch) {
+      lineFlags.push(
+        makeFlag(
+          "WEAK_MATERIAL_MATCH",
+          `Materiaalvoorkeur "${input.materialPreference}" zwak gematcht op prijsregel "${pricing!.item_name}" — controleer of dit klopt`
         )
       );
     }

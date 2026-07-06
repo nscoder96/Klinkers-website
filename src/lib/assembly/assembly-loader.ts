@@ -43,6 +43,7 @@ export interface AssemblyWithComponents extends Assembly {
 /** Mapt één DB-componentrij naar de engine-vorm (`AssemblyComponent`). */
 function toComponent(row: AssemblyComponentRow): AssemblyComponent {
   return {
+    pricing_item_id: row.pricing_item_id,
     item_name_match: row.item_name_match,
     component_type: row.component_type,
     quantity_formula: row.quantity_formula,
