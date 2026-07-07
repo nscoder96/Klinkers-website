@@ -1,5 +1,10 @@
 # UITVOERPLAN — Offertegenerator consolidatie & voorbereiding leerdata
 
+> **STATUS: AFGEROND (2026-07-07).** Alle blokken A, B en C zijn gebouwd, getest en
+> live op productie (commits A1 t/m C3.4, plus bugfix-rondes R1/R2 uit de eerste
+> gebruikssessie). Migraties 14 t/m 19 zijn toegepast. De actuele stand en de
+> openstaande vervolgtaken staan in PROJECT_STATUS.md — dit document is historie.
+
 Doel van deze slag: één pipeline, elke generatie en elke correctie gelogd, stille foutbronnen dicht. Daarna maakt de eigenaar 25 tot 40 echte offertes; die vormen de golden set en het eerste leersignaal. De learning-loop zelf wordt pas herschreven als die data bestaat.
 
 ## Werkwijze (voor Claude Code)
