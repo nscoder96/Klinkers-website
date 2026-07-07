@@ -16,15 +16,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { Save, Check, FileText, Wrench, Euro, Building2 } from 'lucide-react';
+import { Save, Check, FileText, Wrench, Euro, Building2, Timer } from 'lucide-react';
+import LaborNormsTab from './LaborNormsTab';
 
 type Settings = Record<string, unknown>;
 
-type TabKey = 'layout' | 'arbeid' | 'marges' | 'bedrijf';
+type TabKey = 'layout' | 'arbeid' | 'marges' | 'bedrijf' | 'urennormen';
 
 const TABS: { key: TabKey; label: string; icon: typeof FileText }[] = [
   { key: 'layout', label: 'Offertelay-out', icon: FileText },
   { key: 'arbeid', label: 'Arbeidstarieven', icon: Wrench },
+  { key: 'urennormen', label: 'Urennormen', icon: Timer },
   { key: 'marges', label: 'Materiaalmarges', icon: Euro },
   { key: 'bedrijf', label: 'Bedrijfsgegevens', icon: Building2 },
 ];
@@ -229,6 +231,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        {tab === 'urennormen' && <LaborNormsTab />}
 
         {tab === 'marges' && (
           <Card>
