@@ -255,6 +255,62 @@ describe("generate-v2 phase 'price' (C2.4)", () => {
     expect(res.status).toBe(400);
   });
 
+  it("persist met stap 3-staat: slaat exact de bewerkte regels op + logt de diff (R1.1)", async () => {
+    db.aiOutput = { activities: [ORIG_A] };
+
+    const res = await POST(
+      makeRequest({
+        phase: "price",
+        generationRunId: "run-1",
+        persist: true,
+        activities: [{ ...ORIG_A, dimensions: { area: 24 }, original_index: 0 }],
+        sections: [
+          {
+            title: "Oprit klinkers (aangepaste titel)",
+            lines: [
+              // Pipeline-regel (24 m² gegenereerd), hoeveelheid bewerkt naar 30:
+              { source_key: "p-0-0", pricing_id: "p-leg", description: "Legarbeid klinkers simpel (halfsteens)", line_type: "arbeid", quantity: 30, unit: "m²", unit_price_cents: 1600 },
+            ],
+          },
+          {
+            // Volledig zelfgebouwde sectie — moet gewoon opgeslagen worden.
+            title: "Boomstronken rooien",
+            lines: [
+              { source_key: null, pricing_id: null, description: "Boomstronk rooien (groot)", line_type: "arbeid", quantity: 3, unit: "stuk", unit_price_cents: null },
+            ],
+          },
+        ],
+      })
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.persistence.quoteId).toBe("q-1");
+
+    // Beide secties opgeslagen — ook de zelfgebouwde.
+    const sectionInserts = db.captured.inserts.filter((i) => i.table === "quote_sections");
+    expect(sectionInserts).toHaveLength(2);
+    expect((sectionInserts[1].payload as Record<string, unknown>).title).toBe("Boomstronken rooien");
+
+    // De regels zijn exact de bewerkte staat (30 m², plus de eigen regel).
+    const lineInserts = db.captured.inserts.filter((i) => i.table === "quote_line_items");
+    const alleRegels = lineInserts.flatMap((i) => i.payload as Array<Record<string, unknown>>);
+    expect(alleRegels.find((r) => r.description === "Legarbeid klinkers simpel (halfsteens)")!.quantity).toBe(30);
+    expect(alleRegels.some((r) => r.description === "Boomstronk rooien (groot)")).toBe(true);
+
+    // Offerte-totaal = som van de bewerkte regels: 30 × €16 = €480 excl.
+    const quoteInsert = db.captured.inserts.find((i) => i.table === "quotes")!;
+    expect((quoteInsert.payload as Record<string, unknown>).subtotal).toBe(480);
+
+    // Stap 3-diff gelogd: quantity_changed (24→30) + line_added (boomstronk).
+    const correctieRijen = db.captured.inserts
+      .filter((i) => i.table === "quote_line_corrections")
+      .flatMap((i) => i.payload as Array<Record<string, unknown>>);
+    const types = correctieRijen.map((r) => r.correction_type);
+    expect(types).toContain("quantity_changed");
+    expect(types).toContain("line_added");
+  });
+
   it("persist logt extractie-correcties: afmeting aangevuld + activiteit verwijderd → 2 rijen", async () => {
     db.aiOutput = { activities: [ORIG_A, ORIG_B] };
 

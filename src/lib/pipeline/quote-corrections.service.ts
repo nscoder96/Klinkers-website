@@ -130,6 +130,7 @@ const EXTRACTION_DIM_FIELDS = [
   "length",
   "width",
   "area",
+  "count",
   "afgraafdiepte_cm",
   "zanddikte_cm",
   "opsluiting_lengte_m",
@@ -173,6 +174,14 @@ export function diffExtractionActivities(
         new_value: { dimensions: c.dimensions },
       });
     }
+    if (o.description !== c.description) {
+      rows.push({
+        correction_type: "extraction_corrected",
+        line_description: o.description,
+        old_value: { description: o.description },
+        new_value: { description: c.description },
+      });
+    }
   });
 
   return rows;
@@ -214,6 +223,146 @@ export async function recordExtractionCorrections(
   } catch (e) {
     console.error(
       "[QuoteCorrections] Wegschrijven extractie-correcties mislukt:",
+      e instanceof Error ? e.message : e
+    );
+    return null;
+  }
+}
+
+/**
+ * Stap 3-regel zoals de client hem terugstuurt bij opslaan (R1.1): regels
+ * die uit de pipeline komen dragen hun herkomst-sleutel `p-{sectie}-{regel}`;
+ * handmatig toegevoegde regels hebben er geen.
+ */
+export interface EditedLineInput {
+  source_key?: string | null;
+  pricing_id?: string | null;
+  description: string;
+  line_type: string;
+  quantity: number;
+  unit: string;
+  unit_price_cents: number | null;
+}
+
+export interface EditedSectionInput {
+  title: string;
+  lines: EditedLineInput[];
+}
+
+/** Pipeline-regel met dezelfde herkomst-sleutel, voor de stap 3-diff. */
+export interface GeneratedLineRef {
+  source_key: string;
+  description: string;
+  line_type: string;
+  quantity: number;
+  unit: string;
+  unit_price_cents: number | null;
+}
+
+const centsToEuro = (cents: number | null): number | null =>
+  cents == null ? null : Math.round(cents) / 100;
+
+/**
+ * Puur (R1.1): verschillen tussen de gegenereerde regels en de stap 3-staat
+ * op het moment van opslaan. Match op source_key; per gewijzigd veld één rij
+ * (zelfde vorm als de verzend-diff), verdwenen sleutels = line_removed,
+ * regels zonder sleutel = line_added. Prijzen in de log in euro's,
+ * consistent met diffQuoteLines.
+ */
+export function diffGeneratedVsEdited(
+  generated: GeneratedLineRef[],
+  edited: EditedLineInput[]
+): CorrectionRow[] {
+  const rows: CorrectionRow[] = [];
+  const editedByKey = new Map(
+    edited.filter((l) => l.source_key).map((l) => [l.source_key as string, l])
+  );
+
+  for (const g of generated) {
+    const e = editedByKey.get(g.source_key);
+    if (!e) {
+      rows.push({
+        correction_type: "line_removed",
+        line_description: g.description,
+        old_value: { ...g, unit_price: centsToEuro(g.unit_price_cents) },
+        new_value: null,
+      });
+      continue;
+    }
+    if (numChanged(g.quantity, e.quantity)) {
+      rows.push({
+        correction_type: "quantity_changed",
+        line_description: g.description,
+        old_value: { quantity: g.quantity },
+        new_value: { quantity: e.quantity },
+      });
+    }
+    if (numChanged(g.unit_price_cents ?? 0, e.unit_price_cents ?? 0)) {
+      rows.push({
+        correction_type: "price_changed",
+        line_description: g.description,
+        old_value: { unit_price: centsToEuro(g.unit_price_cents) },
+        new_value: { unit_price: centsToEuro(e.unit_price_cents) },
+      });
+    }
+    if (g.description !== e.description) {
+      rows.push({
+        correction_type: "description_changed",
+        line_description: g.description,
+        old_value: { description: g.description },
+        new_value: { description: e.description },
+      });
+    }
+  }
+
+  for (const e of edited) {
+    if (!e.source_key) {
+      rows.push({
+        correction_type: "line_added",
+        line_description: e.description,
+        old_value: null,
+        new_value: { ...e, unit_price: centsToEuro(e.unit_price_cents) },
+      });
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Schrijft de stap 3-correcties weg bij opslaan (R1.1) — zelfde
+ * niet-blokkerende patroon als de andere correctie-recorders.
+ */
+export async function recordStepThreeCorrections(
+  supabase: SupabaseClient,
+  quoteId: string,
+  generationRunId: string | null,
+  generated: GeneratedLineRef[],
+  edited: EditedLineInput[]
+): Promise<number | null> {
+  try {
+    const corrections = diffGeneratedVsEdited(generated, edited);
+    if (corrections.length === 0) return 0;
+
+    const { error } = await supabase.from("quote_line_corrections").insert(
+      corrections.map((c) => ({
+        quote_id: quoteId,
+        generation_run_id: generationRunId,
+        correction_type: c.correction_type,
+        line_description: c.line_description,
+        old_value: c.old_value,
+        new_value: c.new_value,
+      }))
+    );
+
+    if (error) {
+      console.error("[QuoteCorrections] Wegschrijven stap 3-correcties mislukt:", error.message);
+      return null;
+    }
+    return corrections.length;
+  } catch (e) {
+    console.error(
+      "[QuoteCorrections] Wegschrijven stap 3-correcties mislukt:",
       e instanceof Error ? e.message : e
     );
     return null;

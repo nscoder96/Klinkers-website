@@ -46,6 +46,19 @@ const TYPE_BADGE: Record<string, { label: string; bg: string; color: string }> =
   materieel: { label: 'E', bg: '#f1f5f9', color: '#64748b' },
 };
 
+const LINE_TYPE_LABEL: Record<string, string> = {
+  arbeid: 'Arbeid',
+  materiaal: 'Materiaal',
+  materieel: 'Materieel (machines/containers)',
+};
+
+/** Klik-cyclus voor het regeltype: arbeid → materiaal → materieel → arbeid. */
+const LINE_TYPE_CYCLE = ['arbeid', 'materiaal', 'materieel'];
+function nextLineType(current: string): string {
+  const idx = LINE_TYPE_CYCLE.indexOf(current);
+  return LINE_TYPE_CYCLE[(idx + 1) % LINE_TYPE_CYCLE.length];
+}
+
 // Column widths via inline style — guaranteed to render regardless of Tailwind JIT
 // Trailing 24px-kolom is voor de verwijderknop per regel.
 const COL_STYLE: React.CSSProperties = {
@@ -64,6 +77,7 @@ interface SectionDndListProps {
   onAddLine: (si: number) => void;
   onDeleteLine: (si: number, li: number) => void;
   onDeleteSection: (si: number) => void;
+  onRenameSection: (si: number, title: string) => void;
   onReorderLines: (si: number, newLines: EditableLine[]) => void;
   onReorderSections: (newSections: EditableSection[]) => void;
 }
@@ -75,6 +89,7 @@ export function SectionDndList({
   onAddLine,
   onDeleteLine,
   onDeleteSection,
+  onRenameSection,
   onReorderLines,
   onReorderSections,
 }: SectionDndListProps) {
@@ -113,6 +128,7 @@ export function SectionDndList({
               onAddLine={() => onAddLine(si)}
               onDeleteLine={(li) => onDeleteLine(si, li)}
               onDeleteSection={() => onDeleteSection(si)}
+              onRenameSection={(title) => onRenameSection(si, title)}
               onReorderLines={(newLines) => onReorderLines(si, newLines)}
             />
           ))}
@@ -131,6 +147,7 @@ interface SortableSectionV2Props {
   onAddLine: () => void;
   onDeleteLine: (li: number) => void;
   onDeleteSection: () => void;
+  onRenameSection: (title: string) => void;
   onReorderLines: (newLines: EditableLine[]) => void;
 }
 
@@ -141,6 +158,7 @@ function SortableSectionV2({
   onAddLine,
   onDeleteLine,
   onDeleteSection,
+  onRenameSection,
   onReorderLines,
 }: SortableSectionV2Props) {
   const {
@@ -195,7 +213,12 @@ function SortableSectionV2({
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <span className="flex-1 text-sm font-semibold text-slate-800">{section.title}</span>
+        <input
+          value={section.title}
+          onChange={(e) => onRenameSection(e.target.value)}
+          className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-slate-800 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:outline-none"
+          aria-label="Sectietitel"
+        />
         {section.unmatched && (
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">
             handmatig opbouwen
@@ -400,8 +423,11 @@ function SortableLineRow({ line, showIncl, onUpdate, onDelete }: SortableLineRow
         onBlur={(e) => (e.target.style.boxShadow = 'none')}
       />
 
-      {/* Type badge */}
-      <span
+      {/* Type badge — klik om te wisselen: Arbeid → Materiaal → matEriEel */}
+      <button
+        type="button"
+        onClick={() => onUpdate({ line_type: nextLineType(line.line_type) })}
+        title={`${LINE_TYPE_LABEL[line.line_type] ?? line.line_type} — klik om te wisselen (arbeid / materiaal / materieel)`}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -413,10 +439,12 @@ function SortableLineRow({ line, showIncl, onUpdate, onDelete }: SortableLineRow
           fontWeight: 700,
           background: badge.bg,
           color: badge.color,
+          border: 'none',
+          cursor: 'pointer',
         }}
       >
         {badge.label}
-      </span>
+      </button>
 
       {/* Aantal */}
       <input

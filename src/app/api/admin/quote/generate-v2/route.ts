@@ -37,8 +37,12 @@ import {
   type PipelineConfig,
   type PipelineResult,
 } from "@/lib/pipeline/quote-pipeline.service";
-import { persistQuote } from "@/lib/pipeline/quote-persistence.service";
-import { recordExtractionCorrections } from "@/lib/pipeline/quote-corrections.service";
+import { persistQuote, persistEditedQuote } from "@/lib/pipeline/quote-persistence.service";
+import {
+  recordExtractionCorrections,
+  recordStepThreeCorrections,
+  type GeneratedLineRef,
+} from "@/lib/pipeline/quote-corrections.service";
 import { ensureLead } from "@/lib/pipeline/ensure-lead";
 import { createServerClient } from "@/lib/supabase/client";
 import { ActivitySchema, type Activity } from "@/lib/schemas/ai-understanding.schema";
@@ -53,6 +57,34 @@ const ConfirmedActivitySchema = ActivitySchema.extend({
   original_index: z.number().int().min(0),
 });
 const ConfirmedActivitiesSchema = z.array(ConfirmedActivitySchema).min(1);
+
+/** Stap 3-staat zoals de client hem terugstuurt bij opslaan (R1.1). */
+const EditedLineSchema = z.object({
+  source_key: z.string().nullable().optional(),
+  pricing_id: z.string().nullable().optional(),
+  description: z.string(),
+  line_type: z.enum(["arbeid", "materiaal", "materieel", "all_in"]),
+  quantity: z.number().min(0),
+  unit: z.string(),
+  unit_price_cents: z.number().int().nullable(),
+});
+const EditedSectionsSchema = z.array(
+  z.object({ title: z.string().min(1), lines: z.array(EditedLineSchema) })
+);
+
+/** Pipeline-regels → herkomst-refs met dezelfde sleutels als de client. */
+function toGeneratedRefs(pipeline: PipelineResult): GeneratedLineRef[] {
+  return pipeline.sections.flatMap((s, si) =>
+    (s.display?.lines ?? []).map((l, li) => ({
+      source_key: `p-${si}-${li}`,
+      description: l.description,
+      line_type: l.line_type,
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price_cents: l.unit_price_cents,
+    }))
+  );
+}
 
 function formatSectionTitle(
   description: string,
@@ -223,6 +255,21 @@ async function handlePrice(supabase: SupabaseClient, body: Record<string, unknow
 
   let persistence = null;
   if (body.persist === true) {
+    // R1.1: heeft de client de stap 3-staat meegestuurd, dan wordt exact díe
+    // opgeslagen (incl. handmatige regels en zelfgebouwde secties) — niet de
+    // herberekende pipeline-uitvoer. De diff tegen de generatie is leerdata.
+    let editedSections = null;
+    if (body.sections !== undefined) {
+      const parsedSections = EditedSectionsSchema.safeParse(body.sections);
+      if (!parsedSections.success) {
+        return NextResponse.json(
+          { error: "Ongeldige offerte-regels", details: parsedSections.error.issues },
+          { status: 400 }
+        );
+      }
+      editedSections = parsedSections.data;
+    }
+
     const leadId = await ensureLead(supabase, {
       name: strOr(body.customerName),
       phone: strOr(body.customerPhone),
@@ -230,13 +277,27 @@ async function handlePrice(supabase: SupabaseClient, body: Record<string, unknow
       address: strOr(body.customerAddress),
     });
 
-    persistence = await persistQuote(supabase, pipeline, {
+    const persistOpts = {
       projectDescription:
         typeof body.projectDescription === "string" ? body.projectDescription : undefined,
       projectAddress:
         typeof body.projectAddress === "string" ? body.projectAddress : undefined,
       leadId,
-    });
+    };
+
+    persistence = editedSections
+      ? await persistEditedQuote(supabase, editedSections, persistOpts)
+      : await persistQuote(supabase, pipeline, persistOpts);
+
+    if (editedSections) {
+      await recordStepThreeCorrections(
+        supabase,
+        persistence.quoteId,
+        generationRunId,
+        toGeneratedRefs(pipeline),
+        editedSections.flatMap((s) => s.lines)
+      );
+    }
 
     // Extractie-correcties: diff tegen de originele AI-output uit de run.
     // Kan pas nu — quote_line_corrections.quote_id is not null.

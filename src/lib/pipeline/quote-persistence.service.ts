@@ -11,9 +11,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toLineItemInserts } from "../pricing/quote-snapshot.service";
-import { fromCents, sumCents, Cents } from "../money";
+import { fromCents, sumCents, multiplyCents, Cents } from "../money";
 import type { PipelineResult, PipelineSection } from "./quote-pipeline.service";
-import type { QuoteLineSnapshot } from "./quote-corrections.service";
+import type {
+  EditedSectionInput,
+  QuoteLineSnapshot,
+} from "./quote-corrections.service";
 
 /** BTW Hoog 21% — zie tax_rates seed. */
 const TAX_RATE_21_ID = "b63dbcd0-e69d-4281-94f7-7bb5458ed770";
@@ -183,6 +186,121 @@ export async function persistQuote(
       createdLineItems.push(...((createdRows ?? []) as QuoteLineSnapshot[]));
       lineItemsCreated += inserts.length;
     }
+  }
+
+  return {
+    quoteId: quote.id,
+    quoteNumber: quote.quote_number,
+    sectionsCreated,
+    lineItemsCreated,
+    lineItems: createdLineItems,
+  };
+}
+
+/**
+ * R1.1: schrijft de stap 3-staat exact weg zoals de gebruiker hem ziet —
+ * inclusief zelf toegevoegde regels en complete zelfgebouwde secties.
+ * Totalen zijn de som van de meegezonden regels (in centen), zodat het
+ * opgeslagen totaal per definitie klopt met de opgeslagen regels.
+ */
+export async function persistEditedQuote(
+  supabase: SupabaseClient,
+  sections: EditedSectionInput[],
+  opts: PersistOptions = {}
+): Promise<PersistResult> {
+  const todayIso = opts.today ?? new Date().toISOString().slice(0, 10);
+  const year = parseInt(todayIso.slice(0, 4), 10);
+  const validUntil = addDays(todayIso, opts.validityDays ?? 30);
+
+  const lineTotalCents = (l: { quantity: number; unit_price_cents: number | null }): Cents =>
+    l.unit_price_cents == null ? 0 : multiplyCents(l.unit_price_cents, l.quantity);
+  const sectionCents = (s: EditedSectionInput): Cents =>
+    sumCents(s.lines.map(lineTotalCents));
+
+  const subtotalCents = sumCents(sections.map(sectionCents));
+  const btwCents = Math.round(subtotalCents * 0.21);
+
+  const quoteNumber = await nextQuoteNumber(supabase, year);
+
+  const { data: quote, error: qErr } = await supabase
+    .from("quotes")
+    .insert({
+      quote_number: quoteNumber,
+      status: "draft",
+      valid_until: validUntil,
+      project_description: opts.projectDescription ?? null,
+      project_address: opts.projectAddress ?? null,
+      customer_id: opts.customerId ?? null,
+      lead_id: opts.leadId ?? null,
+      subtotal: fromCents(subtotalCents),
+      btw_percentage: 21,
+      btw_amount: fromCents(btwCents),
+      total: fromCents(subtotalCents + btwCents),
+      line_items: [],
+    })
+    .select("id, quote_number")
+    .single();
+
+  if (qErr || !quote) {
+    throw new Error(`Kon offerte niet aanmaken: ${qErr?.message ?? "onbekend"}`);
+  }
+
+  let sectionsCreated = 0;
+  let lineItemsCreated = 0;
+  let displayOrder = 0;
+  const createdLineItems: QuoteLineSnapshot[] = [];
+
+  for (const [index, section] of sections.entries()) {
+    const { data: sectionRow, error: sErr } = await supabase
+      .from("quote_sections")
+      .insert({
+        quote_id: quote.id,
+        title: section.title,
+        display_order: index,
+        subtotal: fromCents(sectionCents(section)),
+      })
+      .select("id")
+      .single();
+
+    if (sErr || !sectionRow) {
+      throw new Error(`Kon sectie niet aanmaken: ${sErr?.message ?? "onbekend"}`);
+    }
+    sectionsCreated++;
+
+    if (section.lines.length === 0) continue;
+
+    const inserts = section.lines.map((l) => {
+      const unitPrice = l.unit_price_cents != null ? fromCents(l.unit_price_cents) : 0;
+      return {
+        section_id: sectionRow.id,
+        pricing_id: l.pricing_id ?? null,
+        description: l.description,
+        description_snapshot: l.description,
+        quantity: l.quantity,
+        unit: l.unit,
+        unit_price: unitPrice,
+        unit_price_snapshot: l.unit_price_cents != null ? unitPrice : null,
+        total_price: fromCents(lineTotalCents(l)),
+        line_type: l.line_type,
+        assembly_id: null,
+        tax_rate_id: TAX_RATE_21_ID,
+        vat_rate: 21,
+        is_visible_on_pdf: true,
+        is_auto_calculated: false,
+        display_order: displayOrder++,
+      };
+    });
+
+    const { data: createdRows, error: liErr } = await supabase
+      .from("quote_line_items")
+      .insert(inserts)
+      .select("id, description, quantity, unit, unit_price, line_type, section_id");
+
+    if (liErr) {
+      throw new Error(`Kon offerteregels niet aanmaken: ${liErr.message}`);
+    }
+    createdLineItems.push(...((createdRows ?? []) as QuoteLineSnapshot[]));
+    lineItemsCreated += inserts.length;
   }
 
   return {

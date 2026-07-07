@@ -11,8 +11,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   diffQuoteLines,
   diffExtractionActivities,
+  diffGeneratedVsEdited,
   recordQuoteCorrections,
   type ConfirmedActivity,
+  type EditedLineInput,
+  type GeneratedLineRef,
   type QuoteLineSnapshot,
 } from "../quote-corrections.service";
 import type { Activity } from "../../schemas/ai-understanding.schema";
@@ -151,6 +154,69 @@ describe("diffExtractionActivities (C2.4)", () => {
     const diff = diffExtractionActivities(origineel, bevestigd);
     expect(diff).toHaveLength(1);
     expect(diff[0].new_value).toEqual({ dimensions: { area: 24, afgraafdiepte_cm: 20 } });
+  });
+});
+
+// ── diffGeneratedVsEdited: stap 3-opslaan (R1.1) ──────────────────────────────
+
+function genLine(partial: Partial<GeneratedLineRef>): GeneratedLineRef {
+  return {
+    source_key: "p-0-0",
+    description: "Legarbeid klinkers",
+    line_type: "arbeid",
+    quantity: 70,
+    unit: "m²",
+    unit_price_cents: 1600,
+    ...partial,
+  };
+}
+
+function editedLine(partial: Partial<EditedLineInput>): EditedLineInput {
+  return { ...genLine({}), ...partial };
+}
+
+describe("diffGeneratedVsEdited (R1.1)", () => {
+  it("acceptatiegeval: hoeveelheid gewijzigd + eigen regel toegevoegd + regel verwijderd", () => {
+    const generated = [
+      genLine({ source_key: "p-0-0", description: "Legarbeid klinkers", quantity: 70 }),
+      genLine({ source_key: "p-0-1", description: "Voegzand zak 25 kg", line_type: "materiaal", quantity: 14, unit_price_cents: 2000 }),
+    ];
+    const edited: EditedLineInput[] = [
+      editedLine({ source_key: "p-0-0", quantity: 75 }), // gewijzigd
+      // p-0-1 verwijderd
+      editedLine({ source_key: null, description: "Boomstronk rooien (groot)", line_type: "arbeid", quantity: 3, unit: "stuk", unit_price_cents: null }), // eigen regel
+    ];
+
+    const diff = diffGeneratedVsEdited(generated, edited);
+
+    expect(diff.map((d) => d.correction_type).sort()).toEqual([
+      "line_added",
+      "line_removed",
+      "quantity_changed",
+    ]);
+    const qty = diff.find((d) => d.correction_type === "quantity_changed")!;
+    expect(qty.old_value).toEqual({ quantity: 70 });
+    expect(qty.new_value).toEqual({ quantity: 75 });
+    const added = diff.find((d) => d.correction_type === "line_added")!;
+    expect(added.line_description).toBe("Boomstronk rooien (groot)");
+    const removed = diff.find((d) => d.correction_type === "line_removed")!;
+    expect(removed.line_description).toBe("Voegzand zak 25 kg");
+  });
+
+  it("prijswijziging wordt in euro's gelogd (consistent met de verzend-diff)", () => {
+    const diff = diffGeneratedVsEdited(
+      [genLine({ unit_price_cents: 1600 })],
+      [editedLine({ unit_price_cents: 1850 })]
+    );
+    expect(diff).toHaveLength(1);
+    expect(diff[0].correction_type).toBe("price_changed");
+    expect(diff[0].old_value).toEqual({ unit_price: 16 });
+    expect(diff[0].new_value).toEqual({ unit_price: 18.5 });
+  });
+
+  it("ongewijzigde staat → lege diff", () => {
+    const generated = [genLine({})];
+    expect(diffGeneratedVsEdited(generated, [editedLine({})])).toHaveLength(0);
   });
 });
 

@@ -30,6 +30,7 @@ interface DisplayLine {
   unit: string;
   unit_price_cents: number | null;
   total_cents: number | null;
+  pricing_id?: string | null;
 }
 interface Breakdown {
   subtotal: number;
@@ -91,10 +92,17 @@ interface PriceResponse {
   persistence?: { quoteId: string; quoteNumber: string } | null;
 }
 
-/** Bruikbare afmeting: oppervlak, of lengte × breedte. Anders rood (C2.4). */
+/**
+ * Bruikbare afmeting: oppervlak, lengte × breedte, of een aantal (stuks-werk
+ * zoals boomstronken rooien heeft geen m² nodig). Anders rood (C2.4/R1.4).
+ */
 function hasDimensions(a: AIActivity): boolean {
   const d = a.dimensions;
-  return (d.area ?? 0) > 0 || ((d.length ?? 0) > 0 && (d.width ?? 0) > 0);
+  return (
+    (d.area ?? 0) > 0 ||
+    ((d.length ?? 0) > 0 && (d.width ?? 0) > 0) ||
+    (d.count ?? 0) > 0
+  );
 }
 
 // --- Helpers ---
@@ -135,15 +143,18 @@ const PLACEHOLDER_LINE = (): EditableLine => ({
 });
 
 function toEditableSections(sections: Section[]): EditableSection[] {
-  return sections.map((s) => ({
+  return sections.map((s, si) => ({
     id: nextId(),
     title: s.title,
     flags: s.flags,
     unmatched: s.unmatched,
     lines:
       s.display_lines.length > 0
-        ? s.display_lines.map((l) => ({
+        ? s.display_lines.map((l, li) => ({
             id: nextId(),
+            // Herkomst-sleutel: hierop difft de server bij opslaan (R1.1).
+            source_key: `p-${si}-${li}`,
+            pricing_id: l.pricing_id ?? null,
             description: l.description,
             line_type: l.line_type,
             quantity: l.quantity,
@@ -246,6 +257,20 @@ export default function NieuwV2Page() {
           activities: confirmed,
           method,
           persist: true,
+          // R1.1: opslaan-wat-je-ziet — de volledige stap 3-staat gaat mee,
+          // inclusief handmatige regels en zelfgebouwde secties.
+          sections: editableSections.map((s) => ({
+            title: s.title,
+            lines: s.lines.map((l) => ({
+              source_key: l.source_key ?? null,
+              pricing_id: l.pricing_id ?? null,
+              description: l.description,
+              line_type: l.line_type,
+              quantity: l.quantity,
+              unit: l.unit,
+              unit_price_cents: l.unit_price_cents,
+            })),
+          })),
           projectDescription: customerName
             ? `Offerte voor ${customerName}`
             : extraction?.ai.summary,
@@ -292,6 +317,19 @@ export default function NieuwV2Page() {
   const removeActivity = (index: number) => {
     setConfirmed((prev) => prev.filter((_, i) => i !== index));
   };
+
+  // Bevestigingsstap: omschrijving (= latere sectietitel) corrigeren.
+  const updateDescription = (index: number, description: string) => {
+    setConfirmed((prev) =>
+      prev.map((a, i) => (i !== index ? a : { ...a, description }))
+    );
+  };
+
+  const renameSection = useCallback((si: number, title: string) => {
+    setEditableSections((prev) =>
+      prev.map((section, s) => (s !== si ? section : { ...section, title }))
+    );
+  }, []);
 
   const updateLine = useCallback(
     (si: number, li: number, patch: Partial<EditableLine>) => {
@@ -465,9 +503,14 @@ export default function NieuwV2Page() {
                       incompleet ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-900">{a.description}</span>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <input
+                        value={a.description}
+                        onChange={(e) => updateDescription(i, e.target.value)}
+                        className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 font-medium text-slate-900 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:outline-none"
+                        aria-label="Omschrijving (wordt de sectietitel)"
+                      />
+                      <div className="flex flex-shrink-0 items-center gap-2">
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                           {a.action}
                         </span>
@@ -485,7 +528,7 @@ export default function NieuwV2Page() {
                     {incompleet && (
                       <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-red-700">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                        Afmetingen verplicht — vul oppervlak of lengte × breedte in
+                        Afmetingen verplicht — vul oppervlak, lengte × breedte of aantal in
                       </p>
                     )}
 
@@ -507,6 +550,12 @@ export default function NieuwV2Page() {
                         value={a.dimensions.area}
                         invalid={incompleet}
                         onChange={(v) => updateDimension(i, 'area', v)}
+                      />
+                      <DimField
+                        label="Aantal (stuks)"
+                        value={a.dimensions.count}
+                        invalid={incompleet}
+                        onChange={(v) => updateDimension(i, 'count', v)}
                       />
                       <DimField
                         label="Afgraafdiepte (cm)"
@@ -605,6 +654,7 @@ export default function NieuwV2Page() {
                 onAddLine={addLine}
                 onDeleteLine={deleteLine}
                 onDeleteSection={deleteSection}
+                onRenameSection={renameSection}
                 onReorderLines={reorderLines}
                 onReorderSections={reorderSections}
               />
