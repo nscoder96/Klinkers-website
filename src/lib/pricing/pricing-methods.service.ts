@@ -50,11 +50,10 @@ export interface PricingMethodConfig {
   min_hours_per_day?: number;
   /** Afrondingsrichting van dagen (default 'ceil'). */
   day_rounding?: "ceil" | "round" | "floor";
-  /** CROW-dagproductie omgerekend naar m²/uur (default 5 = 40 m²/dag ÷ 8u). */
-  crow_m2_per_hour?: number;
   /**
    * AI-geschatte arbeidsuren voor deze activiteit (Laag 1, 2-mans koppel).
-   * Aanwezig → gebruikt als urenbasis; afwezig → CROW-terugval mét vlag.
+   * Verplicht bij methode 'uren' met arbeidsregels — zonder schatting hoort
+   * de pipeline al geblokkeerd te hebben (MISSING_LABOR_NORM, C3.3).
    */
   estimated_hours?: number;
 }
@@ -98,20 +97,17 @@ function toAllIn(expand: ExpandResult, config: PricingMethodConfig): MethodLine[
   ];
 }
 
-const HOURS_FALLBACK_FLAG = makeFlag(
-  "MISSING_HOURS_ESTIMATE",
-  "Urenschatting ontbreekt — arbeid geschat via CROW-norm, controleer de uren"
-);
-
 /** Uurtarief excl. BTW als er geen instelling is (koppelprijs eigenaar). */
 const DEFAULT_HOURLY_RATE = 85;
 
 /**
  * Methode C: arbeidregels vervangen door één uren-regel met de RAUWE uren van
- * deze sectie. Urenbasis: de AI-schatting per activiteit (A1); zonder schatting
- * valt de berekening terug op de CROW-norm en krijgt de offerte een
- * waarschuwingsvlag. De dagafronding gebeurt bewust NIET hier maar één keer
- * over het offertetotaal, in runQuotePipeline — vaste werking.
+ * deze sectie. Urenbasis: de AI-schatting per activiteit (A1). Zonder
+ * schatting faalt dit hard (C3.3) — de pipeline hoort zo'n activiteit al
+ * geblokkeerd te hebben met MISSING_LABOR_NORM; de vroegere stille
+ * CROW-terugval (oppervlak ÷ 5) was een gegokte urennorm en is vervallen.
+ * De dagafronding gebeurt bewust NIET hier maar één keer over het
+ * offertetotaal, in runQuotePipeline — vaste werking.
  */
 function toHours(
   expand: ExpandResult,
@@ -122,9 +118,12 @@ function toHours(
   if (laborLines.length === 0) return { lines: asMethodLines(expand.lines), flags: [] };
 
   const hasEstimate = config.estimated_hours != null && config.estimated_hours > 0;
-  const crow = config.crow_m2_per_hour ?? 5;
-  const rawHours = hasEstimate ? config.estimated_hours! : config.area_m2 / crow;
-  const hours = Math.round(rawHours * 100) / 100;
+  if (!hasEstimate) {
+    throw new Error(
+      "Urenschatting ontbreekt voor methode 'uren' — hoort door de pipeline geblokkeerd te zijn (MISSING_LABOR_NORM); er wordt geen urennorm gegokt"
+    );
+  }
+  const hours = Math.round(config.estimated_hours! * 100) / 100;
   const rateCents = toCents(config.hourly_rate ?? DEFAULT_HOURLY_RATE);
 
   const laborFlags = dedupeFlags(laborLines.flatMap((l) => l.flags));
@@ -143,7 +142,7 @@ function toHours(
 
   return {
     lines: [...asMethodLines(nonLabor), laborLine],
-    flags: hasEstimate ? [] : [HOURS_FALLBACK_FLAG],
+    flags: [],
   };
 }
 

@@ -16,7 +16,7 @@ export type FlagCode =
   | "MISSING_DIMENSIONS"
   | "WEAK_MATERIAL_MATCH"
   | "DISTRIBUTION_OUT_OF_NORM"
-  | "MISSING_HOURS_ESTIMATE";
+  | "MISSING_LABOR_NORM";
 
 export interface QuoteFlag {
   code: FlagCode;
@@ -30,7 +30,8 @@ export interface QuoteFlag {
  * emitter: MISSING_DEPTH/MISSING_SAND_THICKNESS en MISSING_DIMENSIONS in de
  * pipeline (C2.2/C2.5), WEAK_MATERIAL_MATCH en MISSING_PRICE in de
  * assembly-expansie (C1), UNMATCHED_ACTIVITY en DISTRIBUTION_OUT_OF_NORM in
- * pipeline/structurering, MISSING_HOURS_ESTIMATE in de uren-methode.
+ * pipeline/structurering, MISSING_LABOR_NORM in de pipeline bij methode
+ * 'uren' zonder urenschatting (C3.3 — verving de stille CROW-terugval).
  */
 export const FLAG_SEVERITY: Record<FlagCode, FlagSeverity> = {
   MISSING_DEPTH: "blocking",
@@ -40,7 +41,7 @@ export const FLAG_SEVERITY: Record<FlagCode, FlagSeverity> = {
   MISSING_DIMENSIONS: "blocking",
   WEAK_MATERIAL_MATCH: "warning",
   DISTRIBUTION_OUT_OF_NORM: "warning",
-  MISSING_HOURS_ESTIMATE: "warning",
+  MISSING_LABOR_NORM: "blocking",
 };
 
 /** Maakt een vlag met de vaste severity van de code. */

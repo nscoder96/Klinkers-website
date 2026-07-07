@@ -182,6 +182,30 @@ function processActivity(
     };
   }
 
+  // C3.3: methode 'uren' vereist een urenschatting voor activiteiten met
+  // arbeid — de vroegere stille CROW-terugval (oppervlak ÷ 5) was een
+  // gegokte urennorm. Zelfde patroon: geen regels, blocking flag.
+  const needsHours =
+    config.method === "uren" &&
+    withComponents.components.some((c) => c.component_type === "arbeid") &&
+    !(activity.estimated_hours != null && activity.estimated_hours > 0);
+  if (needsHours) {
+    return {
+      activity,
+      assembly,
+      expand: null,
+      display: null,
+      structured: null,
+      flags: [
+        makeFlag(
+          "MISSING_LABOR_NORM",
+          `Geen urenschatting voor "${activity.description}" — vul de uren aan of kies methode 'uitgesplitst'`
+        ),
+      ],
+      unmatched: false,
+    };
+  }
+
   const expand = expandAssembly(
     withComponents.components,
     {

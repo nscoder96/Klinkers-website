@@ -104,7 +104,7 @@ describe("applyPricingMethod — meterprijs/aanneemsom (Methode A)", () => {
 });
 
 describe("applyPricingMethod — uren × uurtarief (Methode C)", () => {
-  const result = applyPricingMethod(expand, "uren", baseConfig);
+  const result = applyPricingMethod(expand, "uren", { ...baseConfig, estimated_hours: 14 });
 
   it("behoudt materiaalregels, vervangt arbeid door één uren-regel", () => {
     const materiaal = result.lines.filter((l) => l.line_type === "materiaal");
@@ -113,7 +113,7 @@ describe("applyPricingMethod — uren × uurtarief (Methode C)", () => {
     expect(arbeid).toHaveLength(1);
   });
 
-  it("CROW-terugval geeft rauwe uren: 70 m² / 5 = 14 u × €85 = €1.190 (dagafronding is offerteniveau)", () => {
+  it("rauwe uren: 14 u × €85 = €1.190 (dagafronding is offerteniveau)", () => {
     const arbeid = result.lines.find((l) => l.line_type === "arbeid")!;
     expect(arbeid.quantity).toBe(14); // rauwe uren, niet per sectie afgerond
     expect(arbeid.unit).toBe("uur");
@@ -123,13 +123,21 @@ describe("applyPricingMethod — uren × uurtarief (Methode C)", () => {
   });
 
   it("respecteert een afwijkend uurtarief", () => {
-    const dearder = applyPricingMethod(expand, "uren", { ...baseConfig, hourly_rate: 95 });
+    const dearder = applyPricingMethod(expand, "uren", {
+      ...baseConfig,
+      estimated_hours: 14,
+      hourly_rate: 95,
+    });
     const arbeid = dearder.lines.find((l) => l.line_type === "arbeid")!;
     expect(arbeid.total_cents).toBe(14 * 95 * 100); // €1.330
   });
 
-  it("zonder urenschatting → CROW-terugval mét waarschuwingsvlag", () => {
-    expect(result.flags.some((f) => f.code === "MISSING_HOURS_ESTIMATE")).toBe(true);
+  it("zonder urenschatting → fout: de pipeline hoort dit als MISSING_LABOR_NORM te blokkeren (C3.3)", () => {
+    // De stille CROW-terugval (oppervlak / 5) is vervallen — een gegokte
+    // urennorm mag nooit stil in een offerte belanden.
+    expect(() => applyPricingMethod(expand, "uren", baseConfig)).toThrow(
+      /urenschatting/i
+    );
   });
 });
 

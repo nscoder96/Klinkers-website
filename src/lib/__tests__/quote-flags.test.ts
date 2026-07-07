@@ -18,12 +18,12 @@ const BLOCKING_CODES: FlagCode[] = [
   "MISSING_PRICE",
   "UNMATCHED_ACTIVITY",
   "MISSING_DIMENSIONS",
+  "MISSING_LABOR_NORM",
 ];
 
 const WARNING_CODES: FlagCode[] = [
   "WEAK_MATERIAL_MATCH",
   "DISTRIBUTION_OUT_OF_NORM",
-  "MISSING_HOURS_ESTIMATE",
 ];
 
 describe("quote-flags — blocking-gedrag per code (A3)", () => {

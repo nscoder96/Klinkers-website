@@ -520,16 +520,30 @@ describe("runQuotePipeline — meerdere activiteiten", () => {
     expect(result.hasBlockingFlags).toBe(true);
   });
 
-  it("uren-methode zonder urenschatting → terugval-vlag zichtbaar op de sectie (A1)", () => {
+  it("uren-methode zonder urenschatting → MISSING_LABOR_NORM (blocking), geen stille CROW-gok (C3.3)", () => {
     const result = runQuotePipeline(
       [{ type: "bestrating", action: "herstraten", description: "Terras herstraten", area_m2: 24 }],
       ASSEMBLIES,
       PRICING,
       { method: "uren", layout: "uitgesplitst" }
     );
-    expect(result.flags.some((f) => f.code === "MISSING_HOURS_ESTIMATE")).toBe(true);
-    // De terugval is een waarschuwing, geen blokkade.
-    expect(result.hasBlockingFlags).toBe(false);
+    const flag = result.flags.find((f) => f.code === "MISSING_LABOR_NORM");
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe("blocking");
+    // Geen regels op basis van een gegokte urennorm.
+    expect(result.sections[0].expand).toBeNull();
+    expect(result.hasBlockingFlags).toBe(true);
+  });
+
+  it("uren-methode mét urenschatting → geen MISSING_LABOR_NORM (C3.3)", () => {
+    const result = runQuotePipeline(
+      [{ type: "bestrating", action: "herstraten", description: "Terras herstraten", area_m2: 24, estimated_hours: 6 }],
+      ASSEMBLIES,
+      PRICING,
+      { method: "uren", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_LABOR_NORM")).toBe(false);
+    expect(result.sections[0].display!.lines.some((l) => l.unit === "uur")).toBe(true);
   });
 
   it("UNMATCHED_ACTIVITY is blocking: geen template → niet verstuurbaar (A3)", () => {
