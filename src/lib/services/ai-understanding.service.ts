@@ -18,14 +18,18 @@ import {
   AIUnderstandingResult,
 } from "../schemas/ai-understanding.schema";
 import { TOP_20_RULES_FOR_PROMPT } from "../rules/garden-element-rules";
+import { buildNormsBlock, type LaborNorm } from "./labor-norms";
 
 /**
  * Promptversie (B2). Hoog dit op bij ELKE inhoudelijke wijziging van de
  * prompt of het outputschema — de versie wordt met elke generation run
  * meegelogd in `quote_generation_runs`, zodat leerdata herleidbaar blijft
  * naar de promptvariant die hem produceerde.
+ *
+ * 2026-07-07.1: urennormen uit de database (labor_norms, C3) i.p.v.
+ * hardcoded — de geseede tabel levert een identiek normenblok (golden-test).
  */
-export const PROMPT_VERSION = "2026-07-06.1";
+export const PROMPT_VERSION = "2026-07-07.1";
 
 /** Expliciet gepind model voor Laag 1 — wordt per generation run meegelogd. */
 export const UNDERSTANDING_MODEL = "claude-sonnet-4-6";
@@ -39,8 +43,12 @@ export const UNDERSTANDING_MODEL = "claude-sonnet-4-6";
  * - Explains the 10 work categories
  * - Explains the 5 action types
  * - Focuses on extracting dimensions and materials
+ *
+ * C3: het urennormenblok komt uit `labor_norms` (database) en wordt per
+ * aanroep opgebouwd — een normwijziging is direct zichtbaar zonder deploy.
+ * Er is bewust geen hardcoded terugval: geen normen = geen generatie.
  */
-const UNDERSTANDING_PROMPT = `Je bent een AI-assistent die schouwnotities van hoveniers analyseert.
+const buildUnderstandingPrompt = (norms: LaborNorm[]) => `Je bent een AI-assistent die schouwnotities van hoveniers analyseert.
 
 ## Jouw Taak
 Analyseer de schouwnotities en identificeer alle werkzaamheden die uitgevoerd moeten worden.
@@ -174,48 +182,7 @@ Schat per activiteit het totaal aantal arbeidsuren (estimated_hours) voor een
 (afgraven + zandbed + leggen + aantrillen + voegen + opsluitbanden).
 Gebruik deze normen als basis:
 
-**Herstraten/herleggen:**
-- Klinkers herstraten: 1.0 uur per 10m²
-- Tegels herstraten: 0.75 uur per 10m²
-- Kleine formaten (mozaïek, kasseien): 2.0 uur per 10m²
-
-**Nieuw straatwerk:**
-- Klinkers nieuw leggen (incl. zandbed): 1.5 uur per 10m²
-- Tegels nieuw leggen (incl. zandbed): 1.25 uur per 10m²
-- Oprit klinkers aanleggen: 2.0 uur per 10m²
-
-**Grondwerk:**
-- Grond afgraven (10-20cm): 0.5 uur per 10m²
-- Grond afvoeren (met kraan): meegerekend in afgraven
-- Ophogen/aanvullen zand: 0.5 uur per 10m²
-- Aantrillen: 0.3 uur per 10m²
-
-**Opsluitbanden:**
-- Opsluitbanden plaatsen: 1.0 uur per 10 meter
-
-**Schutting/erfafscheiding:**
-- Betonpalen zetten: 1.5 uur per 10 palen
-- Schuttingdelen plaatsen: 0.5 uur per meter
-- Schutting compleet: 1.0 uur per meter
-
-**Gazon:**
-- Graszoden leggen: 0.5 uur per 10m²
-- Grond voorbereiden voor gazon: 0.75 uur per 10m²
-
-**Beplanting:**
-- Struiken planten (klein): 0.5 uur per 5 stuks
-- Struiken planten (groot): 0.5 uur per stuk
-- Border aanleggen: 1.0 uur per 5m²
-
-**Vlonders:**
-- Composiet vlonder plaatsen: 1.5 uur per 5m²
-- Houten vlonder plaatsen: 1.0 uur per 5m²
-- Fundering vlonder (steunpunten): 1.0 uur per 5 punten
-
-**Demontage/verwijdering:**
-- Schutting slopen: 0.5 uur per meter
-- Bestrating uitbreken + afvoeren: 0.5 uur per 10m²
-- Boom rooien (klein): 1.0 uur per stuk
+${buildNormsBlock(norms)}
 
 Regels voor de urenraming:
 - ALLEEN uren schatten als de afmetingen bekend zijn; bij missing_dimensions:
@@ -255,7 +222,8 @@ ${TOP_20_RULES_FOR_PROMPT}`;
  * ```
  */
 export async function analyzeNotes(
-  notes: string
+  notes: string,
+  norms: LaborNorm[]
 ): Promise<AIUnderstandingResult> {
   const client = new Anthropic();
 
@@ -263,7 +231,7 @@ export async function analyzeNotes(
     model: UNDERSTANDING_MODEL,
     max_tokens: 2000,
     betas: ["structured-outputs-2025-11-13"],
-    system: UNDERSTANDING_PROMPT,
+    system: buildUnderstandingPrompt(norms),
     messages: [
       {
         role: "user",

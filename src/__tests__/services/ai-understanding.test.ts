@@ -17,6 +17,22 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { analyzeNotes } from '@/lib/services/ai-understanding.service';
 import { AIUnderstandingResultSchema, AIUnderstandingResult } from '@/lib/schemas/ai-understanding.schema';
 import { DIMENSION_EXAMPLES, CATEGORY_EXAMPLES, EDGE_CASE_EXAMPLES } from '../fixtures/schouwnotities';
+import type { LaborNorm } from '@/lib/services/labor-norms';
+
+// C3: analyzeNotes vereist urennormen (prompt uit de database, geen terugval).
+// De Anthropic-client is gemockt, dus één minimale norm volstaat hier.
+const TEST_NORMS: LaborNorm[] = [{
+  work_type_key: 'klinkers-herstraten',
+  label: 'Klinkers herstraten',
+  category: 'Herstraten/herleggen',
+  unit: 'm²',
+  hours_per_unit: 1,
+  basis_qty: 10,
+  display_text: null,
+  sort_order: 1,
+  source: 'handmatig',
+  is_active: true,
+}];
 
 // Create a mock parse function that will be reused
 const mockParse = vi.fn();
@@ -147,7 +163,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.area_m2);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.area_m2, TEST_NORMS);
 
       expect(result.activities).toHaveLength(1);
       expect(result.activities[0].dimensions.area).toBe(40);
@@ -173,7 +189,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.area_comma);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.area_comma, TEST_NORMS);
 
       expect(result.activities[0].dimensions.area).toBe(15.5);
     });
@@ -204,7 +220,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.length_width);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.length_width, TEST_NORMS);
 
       expect(result.activities[0].dimensions.length).toBe(8);
       expect(result.activities[0].dimensions.width).toBe(12);
@@ -235,7 +251,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.length_bij);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.length_bij, TEST_NORMS);
 
       expect(result.activities[0].dimensions.length).toBe(8);
       expect(result.activities[0].dimensions.width).toBe(12);
@@ -264,7 +280,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.linear_meters);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.linear_meters, TEST_NORMS);
 
       expect(result.activities[0].dimensions.length).toBe(20);
     });
@@ -289,7 +305,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.linear_strekkende);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.linear_strekkende, TEST_NORMS);
 
       expect(result.activities[0].dimensions.length).toBe(25);
     });
@@ -316,7 +332,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.count_number);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.count_number, TEST_NORMS);
 
       expect(result.activities[0].dimensions.count).toBe(3);
     });
@@ -341,7 +357,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.count_word);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.count_word, TEST_NORMS);
 
       expect(result.activities[0].dimensions.count).toBe(5);
     });
@@ -368,7 +384,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.cubic);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.cubic, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('grondwerk');
     });
@@ -393,7 +409,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(DIMENSION_EXAMPLES.approximate);
+      const result = await analyzeNotes(DIMENSION_EXAMPLES.approximate, TEST_NORMS);
 
       expect(result.activities[0].dimensions.area).toBeGreaterThanOrEqual(35);
       expect(result.activities[0].dimensions.area).toBeLessThanOrEqual(40);
@@ -421,7 +437,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.grondwerk);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.grondwerk, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('grondwerk');
     });
@@ -446,7 +462,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.bestrating);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.bestrating, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('bestrating');
     });
@@ -471,7 +487,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.erfafscheiding);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.erfafscheiding, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('erfafscheiding');
     });
@@ -496,7 +512,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.vlonders);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.vlonders, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('vlonders');
     });
@@ -521,7 +537,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.gazon);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.gazon, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('gazon');
     });
@@ -546,7 +562,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.beplanting);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.beplanting, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('beplanting');
     });
@@ -571,7 +587,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.overkappingen);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.overkappingen, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('overkappingen');
     });
@@ -596,7 +612,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.waterwerken);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.waterwerken, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('waterwerken');
     });
@@ -621,7 +637,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.verlichting);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.verlichting, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('verlichting');
     });
@@ -646,7 +662,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(CATEGORY_EXAMPLES.overig);
+      const result = await analyzeNotes(CATEGORY_EXAMPLES.overig, TEST_NORMS);
 
       expect(result.activities[0].type).toBe('overig');
     });
@@ -658,7 +674,7 @@ describe('AI Understanding Service', () => {
         parsed_output: null
       });
 
-      await expect(analyzeNotes('Test notes')).rejects.toThrow(
+      await expect(analyzeNotes('Test notes', TEST_NORMS)).rejects.toThrow(
         'AI response was incomplete'
       );
     });
@@ -666,7 +682,7 @@ describe('AI Understanding Service', () => {
     test('API errors are propagated', async () => {
       mockParse.mockRejectedValue(new Error('API rate limit exceeded'));
 
-      await expect(analyzeNotes('Test notes')).rejects.toThrow(
+      await expect(analyzeNotes('Test notes', TEST_NORMS)).rejects.toThrow(
         'API rate limit exceeded'
       );
     });
@@ -693,7 +709,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      await analyzeNotes(testNotes);
+      await analyzeNotes(testNotes, TEST_NORMS);
 
       // Verify parse was called with correct parameters
       expect(mockParse).toHaveBeenCalledWith(
@@ -721,7 +737,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      await analyzeNotes('Test notes');
+      await analyzeNotes('Test notes', TEST_NORMS);
 
       expect(mockParse).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -741,7 +757,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      await analyzeNotes('Test notes');
+      await analyzeNotes('Test notes', TEST_NORMS);
 
       expect(mockParse).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -772,7 +788,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.tegels_rechtzetten);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.tegels_rechtzetten, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('repareren');
     });
@@ -797,7 +813,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.opnieuw_voegen);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.opnieuw_voegen, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('repareren');
     });
@@ -822,7 +838,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.verzakt_ophogen);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.verzakt_ophogen, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('herstraten');
     });
@@ -847,7 +863,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.ander_patroon);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.ander_patroon, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('herstraten');
     });
@@ -872,7 +888,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.zelfde_soort_terug);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.zelfde_soort_terug, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('vervangen');
     });
@@ -897,7 +913,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.ander_materiaal);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.ander_materiaal, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('vervangen');
     });
@@ -922,7 +938,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.alleen_verwijderen);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.alleen_verwijderen, TEST_NORMS);
 
       expect(result.activities[0].action).toBe('verwijderen');
     });
@@ -955,7 +971,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.mixed_herstraten_nieuw);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.mixed_herstraten_nieuw, TEST_NORMS);
 
       expect(result.activities).toHaveLength(2);
       expect(result.activities[0].action).toBe('herstraten');
@@ -990,7 +1006,7 @@ describe('AI Understanding Service', () => {
         parsed_output: mockResponse
       });
 
-      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.mixed_verwijderen_nieuw);
+      const result = await analyzeNotes(EDGE_CASE_EXAMPLES.mixed_verwijderen_nieuw, TEST_NORMS);
 
       expect(result.activities).toHaveLength(2);
       expect(result.activities[0].action).toBe('verwijderen');

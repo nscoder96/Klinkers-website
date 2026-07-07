@@ -24,6 +24,7 @@ import {
   PROMPT_VERSION,
   UNDERSTANDING_MODEL,
 } from "@/lib/services/ai-understanding.service";
+import { loadActiveLaborNorms } from "@/lib/services/labor-norms";
 import {
   logGenerationRun,
   updateGenerationRun,
@@ -95,6 +96,21 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * C3: laadt de urennormen of geeft een 503 met een expliciete fout terug.
+ * Geen stille terugval naar een ingebakken prompt — zonder normen weigert
+ * de generatie, zodat een lege of onbereikbare tabel direct zichtbaar is.
+ */
+async function loadLaborNormsOr503(supabase: SupabaseClient) {
+  try {
+    return await loadActiveLaborNorms(supabase);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[GenerateV2] Urennormen laden mislukt:", message);
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
+}
+
 /** Instellingen + overrides → PipelineConfig. */
 async function loadConfig(
   supabase: SupabaseClient,
@@ -137,7 +153,11 @@ async function handleExtract(
     );
   }
 
-  const aiResult = await analyzeNotes(notes.trim());
+  // C3: urennormen uit de database — geen normen = geen generatie (fail hard).
+  const norms = await loadLaborNormsOr503(supabase);
+  if (norms instanceof NextResponse) return norms;
+
+  const aiResult = await analyzeNotes(notes.trim(), norms);
   const config = await loadConfig(supabase, body.method, body.layout);
 
   const generationRunId = await logGenerationRun(supabase, {
@@ -282,8 +302,12 @@ async function handleFull(
     );
   }
 
+  // C3: urennormen uit de database — geen normen = geen generatie (fail hard).
+  const norms = await loadLaborNormsOr503(supabase);
+  if (norms instanceof NextResponse) return norms;
+
   // Laag 1: AI Understanding
-  const aiResult = await analyzeNotes(notes.trim());
+  const aiResult = await analyzeNotes(notes.trim(), norms);
 
   // Instellingen + overrides (vóór de 422-check, zodat elke run — ook één
   // zonder gedetecteerde werkzaamheden — met config gelogd kan worden, B1).

@@ -18,6 +18,22 @@ import { analyzeNotes } from '@/lib/services/ai-understanding.service';
 import { generateWorkBreakdown, processAIOutput } from '@/lib/services/business-logic.service';
 import { AIUnderstandingResult } from '@/lib/schemas/ai-understanding.schema';
 import { FULL_SCHOUWNOTITIE_EXAMPLES } from '../fixtures/schouwnotities';
+import type { LaborNorm } from '@/lib/services/labor-norms';
+
+// C3: analyzeNotes vereist urennormen (prompt uit de database, geen terugval).
+// De Anthropic-client is gemockt, dus één minimale norm volstaat hier.
+const TEST_NORMS: LaborNorm[] = [{
+  work_type_key: 'klinkers-herstraten',
+  label: 'Klinkers herstraten',
+  category: 'Herstraten/herleggen',
+  unit: 'm²',
+  hours_per_unit: 1,
+  basis_qty: 10,
+  display_text: null,
+  sort_order: 1,
+  source: 'handmatig',
+  is_active: true,
+}];
 
 // Create a mock parse function
 const mockParse = vi.fn();
@@ -71,7 +87,7 @@ describe('Full Pipeline Integration', () => {
       });
 
       // Layer 1: AI Understanding
-      const aiResult = await analyzeNotes(simpleExample.text);
+      const aiResult = await analyzeNotes(simpleExample.text, TEST_NORMS);
 
       expect(aiResult.activities).toHaveLength(1);
       expect(aiResult.activities[0].type).toBe('bestrating');
@@ -140,7 +156,7 @@ describe('Full Pipeline Integration', () => {
       });
 
       // Layer 1: AI Understanding
-      const aiResult = await analyzeNotes(multiExample.text);
+      const aiResult = await analyzeNotes(multiExample.text, TEST_NORMS);
 
       expect(aiResult.activities.length).toBeGreaterThanOrEqual(2);
 
@@ -183,7 +199,7 @@ describe('Full Pipeline Integration', () => {
       });
 
       // Layer 1: AI detects herstraten action
-      const aiResult = await analyzeNotes(herstratenExample.text);
+      const aiResult = await analyzeNotes(herstratenExample.text, TEST_NORMS);
 
       expect(aiResult.activities).toHaveLength(1);
       expect(aiResult.activities[0].action).toBe('herstraten');
@@ -249,7 +265,7 @@ describe('Full Pipeline Integration', () => {
         parsed_output: mockAIResponse
       });
 
-      const aiResult = await analyzeNotes(mixedExample.text);
+      const aiResult = await analyzeNotes(mixedExample.text, TEST_NORMS);
       const breakdown = await generateWorkBreakdown(aiResult);
 
       const herstratenItems = breakdown.items.filter(i => i.is_herstraten);
@@ -289,7 +305,7 @@ describe('Full Pipeline Integration', () => {
       });
 
       // Layer 1: AI Understanding
-      const aiResult = await analyzeNotes(simpleExample.text);
+      const aiResult = await analyzeNotes(simpleExample.text, TEST_NORMS);
 
       // Verify Layer 1 has NO price fields
       const aiResultKeys = Object.keys(aiResult);
@@ -389,7 +405,7 @@ describe('Full Pipeline Integration', () => {
         parsed_output: mockAIResponse
       });
 
-      const aiResult = await analyzeNotes(complexExample.text);
+      const aiResult = await analyzeNotes(complexExample.text, TEST_NORMS);
 
       expect(aiResult.activities.length).toBeGreaterThanOrEqual(5);
 
@@ -447,7 +463,7 @@ describe('Full Pipeline Integration', () => {
         parsed_output: mockAIResponse
       });
 
-      const aiResult = await analyzeNotes('Terras 8x5m');
+      const aiResult = await analyzeNotes('Terras 8x5m', TEST_NORMS);
 
       expect(aiResult.activities[0].dimensions.length).toBe(8);
       expect(aiResult.activities[0].dimensions.width).toBe(5);
@@ -481,7 +497,7 @@ describe('Full Pipeline Integration', () => {
         parsed_output: mockAIResponse
       });
 
-      const aiResult = await analyzeNotes('Bestrating verwijderen');
+      const aiResult = await analyzeNotes('Bestrating verwijderen', TEST_NORMS);
       expect(aiResult.activities[0].action).toBe('verwijderen');
 
       const breakdown = await generateWorkBreakdown(aiResult);
@@ -530,7 +546,7 @@ describe('Full Pipeline Integration', () => {
         parsed_output: mockAIResponse
       });
 
-      const aiResult = await analyzeNotes('Mixed actions test');
+      const aiResult = await analyzeNotes('Mixed actions test', TEST_NORMS);
       const breakdown = await generateWorkBreakdown(aiResult);
 
       // Activity 1 (herstraten): arbeid only, is_herstraten=true
@@ -576,7 +592,7 @@ describe('Full Pipeline Integration', () => {
         parsed_output: mockAIResponse
       });
 
-      const aiResult = await analyzeNotes('Schutting vervangen');
+      const aiResult = await analyzeNotes('Schutting vervangen', TEST_NORMS);
       expect(aiResult.activities[0].action).toBe('vervangen');
 
       const breakdown = await generateWorkBreakdown(aiResult);
@@ -615,7 +631,7 @@ describe('Full Pipeline Integration', () => {
             parsed_output: mockAIResponse
           });
 
-          const aiResult = await analyzeNotes(`Test ${action} ${category}`);
+          const aiResult = await analyzeNotes(`Test ${action} ${category}`, TEST_NORMS);
           const breakdown = await generateWorkBreakdown(aiResult);
 
           const materialItems = breakdown.items.filter(i => i.line_type === 'materiaal');
@@ -636,7 +652,7 @@ describe('Full Pipeline Integration', () => {
 
       // Note: This will call the real Anthropic API
       // Requires ANTHROPIC_API_KEY in environment
-      const aiResult = await analyzeNotes(simpleExample.text);
+      const aiResult = await analyzeNotes(simpleExample.text, TEST_NORMS);
 
       expect(aiResult.activities.length).toBeGreaterThan(0);
       expect(aiResult.confidence).toBeGreaterThan(0.5);

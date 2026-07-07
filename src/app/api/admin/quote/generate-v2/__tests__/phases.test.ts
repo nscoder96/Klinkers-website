@@ -67,8 +67,22 @@ interface Captured {
   updates: Array<{ table: string; payload: unknown }>;
 }
 
-const db: { aiOutput: unknown; captured: Captured } = {
+const NORM_ROW = {
+  work_type_key: "klinkers-herstraten",
+  label: "Klinkers herstraten",
+  category: "Herstraten/herleggen",
+  unit: "m²",
+  hours_per_unit: 1,
+  basis_qty: 10,
+  display_text: null,
+  sort_order: 1,
+  source: "handmatig",
+  is_active: true,
+};
+
+const db: { aiOutput: unknown; norms: unknown[]; captured: Captured } = {
   aiOutput: null,
+  norms: [NORM_ROW],
   captured: { inserts: [], updates: [] },
 };
 
@@ -104,6 +118,9 @@ function makeBuilder(table: string) {
       return builder;
     },
     then: (resolve: (v: unknown) => unknown) => {
+      if (table === "labor_norms") {
+        return Promise.resolve({ data: db.norms, error: null }).then(resolve);
+      }
       const value =
         table === "quote_line_items"
           ? {
@@ -155,6 +172,7 @@ function makeRequest(body: unknown): Request {
 
 beforeEach(() => {
   db.aiOutput = null;
+  db.norms = [NORM_ROW];
   db.captured = { inserts: [], updates: [] };
   analyzeNotesMock.mockReset();
   loadAssembliesMock.mockClear();
@@ -183,6 +201,23 @@ describe("generate-v2 phase 'extract' (C2.4)", () => {
     expect(
       db.captured.inserts.filter((i) => i.table === "quote_generation_runs")
     ).toHaveLength(1);
+  });
+});
+
+describe("generate-v2 — urennormen fail hard (C3)", () => {
+  it("lege labor_norms-tabel → 503 met duidelijke fout, AI niet aangeroepen", async () => {
+    db.norms = [];
+
+    const res = await POST(makeRequest({ phase: "extract", notes: "oprit klinkers" }));
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.error).toContain("urennormen");
+    expect(analyzeNotesMock).not.toHaveBeenCalled();
+    // Geen run gelogd — er is geen AI-output om te loggen.
+    expect(
+      db.captured.inserts.filter((i) => i.table === "quote_generation_runs")
+    ).toHaveLength(0);
   });
 });
 
