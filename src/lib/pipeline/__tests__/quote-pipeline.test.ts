@@ -84,6 +84,47 @@ const verwijderen: AssemblyWithComponents = {
 
 const ASSEMBLIES = [bestratingNieuw, herstraten, verwijderen];
 
+describe("runQuotePipeline — R2.2: stuks-werk (count als maat)", () => {
+  const boomstronk = {
+    id: "a-stronk",
+    name: "boomstronk_rooien",
+    trigger_category: "beplanting",
+    trigger_action: "verwijderen",
+    unit: "stuk",
+    is_active: true,
+    components: [
+      { item_name_match: "Boomstronk rooien", component_type: "arbeid" as const, quantity_formula: "qty * 1.0", is_optional: false, flag_when_missing: null, sort_order: 1 },
+    ],
+  };
+
+  it("activiteit met count 3 → regel met hoeveelheid 3, geen prijs = blocking MISSING_PRICE", () => {
+    const result = runQuotePipeline(
+      [{ type: "beplanting", action: "verwijderen", description: "Drie boomstronken rooien", area_m2: 0, count: 3 }],
+      [...ASSEMBLIES, boomstronk],
+      PRICING, // bevat geen boomstronk-prijs
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    const section = result.sections[0];
+    expect(section.unmatched).toBe(false);
+    const regel = section.expand!.lines[0];
+    expect(regel.quantity).toBe(3);
+    expect(regel.price_source).toBe("missing");
+    expect(result.flags.some((f) => f.code === "MISSING_PRICE" && f.severity === "blocking")).toBe(true);
+    expect(result.flags.some((f) => f.code === "MISSING_DIMENSIONS")).toBe(false);
+  });
+
+  it("stuks-assembly zonder aantal → MISSING_DIMENSIONS (geen regels met hoeveelheid 0)", () => {
+    const result = runQuotePipeline(
+      [{ type: "beplanting", action: "verwijderen", description: "Boomstronken rooien", area_m2: 0 }],
+      [...ASSEMBLIES, boomstronk],
+      PRICING,
+      { method: "uitgesplitst", layout: "uitgesplitst" }
+    );
+    expect(result.flags.some((f) => f.code === "MISSING_DIMENSIONS")).toBe(true);
+    expect(result.sections[0].expand).toBeNull();
+  });
+});
+
 describe("runQuotePipeline — C2.2: MISSING_DIMENSIONS", () => {
   it("maatgevoelige activiteit zonder afmetingen → blocking flag, geen regels (geen gok)", () => {
     const result = runQuotePipeline(

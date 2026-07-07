@@ -37,6 +37,7 @@ export function toPipelineActivity(activity: Activity): PipelineActivity {
     action: activity.action,
     description: activity.description,
     area_m2: deriveArea(d),
+    count: d.count,
     length_m: d.length,
     width_m: d.width,
     afgraafdiepte_cm: d.afgraafdiepte_cm,

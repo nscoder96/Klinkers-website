@@ -28,8 +28,11 @@ import { buildNormsBlock, type LaborNorm } from "./labor-norms";
  *
  * 2026-07-07.1: urennormen uit de database (labor_norms, C3) i.p.v.
  * hardcoded — de geseede tabel levert een identiek normenblok (golden-test).
+ * 2026-07-07.2: anti-dubbeltelling (R2.1) — elk werk in precies één
+ * activiteit; beplanting/plantvakken/stronken verwijderen is een eigen
+ * activiteit; stuks-werk krijgt count. Voorbeeldcase OFF-2026-050.
  */
-export const PROMPT_VERSION = "2026-07-07.1";
+export const PROMPT_VERSION = "2026-07-07.2";
 
 /** Expliciet gepind model voor Laag 1 — wordt per generation run meegelogd. */
 export const UNDERSTANDING_MODEL = "claude-sonnet-4-6";
@@ -173,8 +176,24 @@ Maak ALLEEN een aparte activiteit bij:
 - een fysiek ander oppervlak/onderdeel (bv. losse oprit én los terras)
 - verwijderen/opbreken van bestaand werk dat los staat van de nieuwe aanleg
 - echt los grondwerk waar GEEN bestrating bovenop komt
+- verwijderen van beplanting, plantvakken, hagen of boomstronken — dat is
+  GEEN onderdeel van bestratingswerk (categorie: beplanting, actie: verwijderen)
 Forfaitaire extra's (kolkaansluiting, drainagegoot) mogen een eigen activiteit
 zijn met categorie 'overig'.
+
+## KRITIEK — Geen dubbeltelling
+Elk stuk werk hoort in precies ÉÉN activiteit. Noem hetzelfde werk NOOIT in
+twee activiteiten — ook niet impliciet in de beschrijving van een andere
+activiteit. Stuks-werk (boomstronken, palen, kolken) krijgt count in
+dimensions, geen m².
+Voorbeeld: "achtertuin 70m2 renoveren: straatwerk eruit, vijf plantvakken
+(10m2) verwijderen, drie boomstronken rooien, 15cm afgraven, opnieuw
+bestraten met keramische tegels" → precies DRIE activiteiten:
+1. bestrating / vervangen, 70m², afgraafdiepte_cm: 15 (uitbreken + afgraven +
+   herbestraten zit hierin)
+2. beplanting / verwijderen, area: 10 — de plantvakken (NIET nogmaals bij het
+   bestratingswerk noemen)
+3. beplanting / verwijderen, count: 3 — de boomstronken (stuks, geen m²)
 
 ## Urenraming per activiteit (2-mans koppel, professioneel)
 Schat per activiteit het totaal aantal arbeidsuren (estimated_hours) voor een

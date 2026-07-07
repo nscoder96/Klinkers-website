@@ -57,6 +57,8 @@ export interface PipelineActivity {
   action: string;
   description: string;
   area_m2: number;
+  /** Aantal stuks (R2.2) — de maat voor stuks-werk zoals boomstronken rooien. */
+  count?: number;
   length_m?: number;
   width_m?: number;
   afgraafdiepte_cm?: number;
@@ -209,7 +211,8 @@ function processActivity(
   const expand = expandAssembly(
     withComponents.components,
     {
-      area_m2: activity.area_m2,
+      // R2.2: bij stuks-werk is het aantal de hoofdmaat (qty) van de assembly.
+      area_m2: assembly.unit === "stuk" ? (activity.count ?? 0) : activity.area_m2,
       length_m: activity.length_m,
       width_m: activity.width_m,
       afgraafdiepte_cm: activity.afgraafdiepte_cm,
@@ -323,17 +326,15 @@ function detectMissingMeasures(
 /**
  * Of de activiteit een afmeting heeft waar de assembly mee kan rekenen (C2.2):
  * m²-werk vereist een oppervlak, m¹-werk een lengte (of AI-berekende
- * opsluitingslengte), stuks-werk heeft geen afmeting nodig.
+ * opsluitingslengte), stuks-werk een aantal (R2.2).
  */
 function hasUsableDimension(activity: PipelineActivity, assemblyUnit: string): boolean {
+  if (assemblyUnit === "stuk") return (activity.count ?? 0) > 0;
   if (activity.area_m2 > 0) return true;
-  if (
+  return (
     assemblyUnit === "m1" &&
     ((activity.opsluiting_lengte_m ?? 0) > 0 || (activity.length_m ?? 0) > 0)
-  ) {
-    return true;
-  }
-  return assemblyUnit === "stuk";
+  );
 }
 
 /** Uren-regel van Methode C (arbeid in uren; rauwe sectie-uren). */

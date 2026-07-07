@@ -90,13 +90,16 @@ function formatSectionTitle(
   description: string,
   area_m2: number,
   length_m: number | undefined,
-  width_m: number | undefined
+  width_m: number | undefined,
+  count: number | undefined
 ): string {
   if (length_m != null && width_m != null) {
     const a = Math.round(length_m * width_m * 10) / 10;
     return `${description} ${length_m}×${width_m} m (${a} m²)`;
   }
   if (area_m2 > 0) return `${description} ${area_m2} m²`;
+  // R2.2: stuks-werk (boomstronken e.d.) heeft een aantal, geen oppervlak.
+  if ((count ?? 0) > 0) return `${description} (${count} stuks)`;
   return `${description} [AFMETINGEN ONTBREKEN]`;
 }
 
@@ -463,7 +466,8 @@ function pipelineResponse(pipeline: PipelineResult) {
         s.activity.description,
         s.activity.area_m2,
         s.activity.length_m,
-        s.activity.width_m
+        s.activity.width_m,
+        s.activity.count
       ),
       assembly: s.assembly?.name ?? null,
       unmatched: s.unmatched,
