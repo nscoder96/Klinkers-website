@@ -142,7 +142,7 @@ const PLACEHOLDER_LINE = (): EditableLine => ({
   unit_price_cents: null,
 });
 
-function toEditableSections(sections: Section[]): EditableSection[] {
+export function toEditableSections(sections: Section[]): EditableSection[] {
   return sections.map((s, si) => ({
     id: nextId(),
     title: s.title,
