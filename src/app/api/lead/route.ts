@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
+import { sendLeadNotification } from '@/lib/services/lead-notification.service';
 
 export async function POST(request: Request) {
   try {
@@ -75,7 +76,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // TODO: Stuur notificatie naar eigenaar (email/WhatsApp)
+    // Notificatie naar Niek — niet-blokkerend: een mailfout mag het opslaan
+    // van de lead nooit breken, maar is wél zichtbaar in de serverlogs.
+    const notification = await sendLeadNotification({
+      id: data.id,
+      name,
+      email,
+      phone,
+      address,
+      postcode,
+      city,
+      project_type,
+      description,
+      estimated_m2,
+      budget_range,
+      urgency,
+    });
+    if (!notification.sent) {
+      console.error('[Lead] Notificatie niet verstuurd:', notification.reason);
+    }
 
     return NextResponse.json({
       success: true,

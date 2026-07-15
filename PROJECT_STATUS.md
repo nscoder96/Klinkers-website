@@ -37,8 +37,12 @@ wacht op de eerste 25–40 echte offertes.
    Niek logt tot die tijd observaties per offertenummer in platte tekst.
 3. **Uren-veld in de bevestigingsstap** (nu alleen afmetingen; bij MISSING_LABOR_NORM
    moet je terug naar stap 1 of methode wisselen).
-4. **RESEND_API_KEY** in Vercel + .env.local — tot die tijd is mailen gesimuleerd
-   (status/leerdata kloppen wél; klantlink `/offerte/[token]` en PDF werken volledig).
+4. **Resend afronden** (2026-07-15): key staat in `.env.local`; lead-notificatie naar
+   info@klinkersenco.nl is gebouwd (`lead-notification.service.ts`, niet-blokkerend).
+   Nog te doen door Niek: (a) domein klinkersenco.nl verifiëren op resend.com/domains
+   (DNS-records toevoegen bij Mijndomein), (b) RESEND_API_KEY als env var in Vercel
+   (project klinkersenconl). Tot die tijd: offertemail gesimuleerd, lead-notificatie
+   geskipt met logregel.
 5. **Vercel opschonen**: 5 projecten hangen aan deze repo; alleen `klinkersenconl`
    serveert het domein; `klinkers-website` en `-wu41` falen al maanden op elke build.
 6. **Test-Supabase** opzetten vóór er meer gebruikers komen (staat ook in
