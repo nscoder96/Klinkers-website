@@ -936,7 +936,8 @@ export default function OfferteMaker() {
                     description: item.description,
                     quantity: item.quantity,
                     unit: item.unit,
-                    unit_price: item.unit_price
+                    unit_price: item.unit_price,
+                    line_type: item.line_type
                   })
                 });
               }
