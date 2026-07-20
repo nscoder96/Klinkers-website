@@ -20,6 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { shouldPromptNewPricingItem, normalizeItemName } from './new-pricing-item-prompt';
 import {
   ChevronDown,
   ChevronRight,
@@ -709,6 +710,8 @@ export default function QuoteEditorTable({
   const [addItemModalSection, setAddItemModalSection] = useState<string | null>(null);
   const [calculationPopoverItem, setCalculationPopoverItem] = useState<LineItem | null>(null);
   const [saveToLibraryItem, setSaveToLibraryItem] = useState<{ sectionId: string; item: LineItem } | null>(null);
+  // Per regel: voor welke omschrijving de "nieuw item?"-vraag al gesteld is
+  const [askedNewItem, setAskedNewItem] = useState<Record<string, string>>({});
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState('');
   const sectionInputRef = useRef<HTMLInputElement>(null);
@@ -818,7 +821,27 @@ export default function QuoteEditorTable({
         return { ...section, items: updatedItems, subtotal };
       })
     );
-  }, [sections, onSectionsChange]);
+
+    // Na een omschrijving-wijziging: vraag of dit een nieuw bibliotheek-item is
+    // (hernoemd t.o.v. gekoppeld item, of losse regel zonder koppeling)
+    if (field === 'description') {
+      const item = sections.find((s) => s.id === sectionId)?.items.find((i) => i.id === itemId);
+      if (item) {
+        const newDescription = String(value);
+        const linked = item.pricing_id ? pricing.find((p) => p.id === item.pricing_id) : null;
+        const normalized = normalizeItemName(newDescription);
+        if (shouldPromptNewPricingItem({
+          description: newDescription,
+          pricingId: item.pricing_id ?? null,
+          linkedItemName: linked?.item_name ?? null,
+          alreadyAsked: askedNewItem[itemId] === normalized
+        })) {
+          setAskedNewItem((prev) => ({ ...prev, [itemId]: normalized }));
+          setSaveToLibraryItem({ sectionId, item: { ...item, description: newDescription } });
+        }
+      }
+    }
+  }, [sections, onSectionsChange, pricing, askedNewItem]);
 
   // Delete item
   const deleteItem = (sectionId: string, itemId: string) => {

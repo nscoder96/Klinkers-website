@@ -12,6 +12,8 @@ import { Section, LineItem } from '@/components/quotes/QuoteSectionCard';
 import { SortableSectionList } from '@/components/quotes/SortableSectionList';
 import { QuoteOverheadCard, OverheadItem } from '@/components/quotes/QuoteOverheadCard';
 import { MaterialPicker } from '@/components/quotes/MaterialPicker';
+import { NewPricingItemDialog, CreatedPricingItem } from '@/components/quotes/NewPricingItemDialog';
+import { shouldPromptNewPricingItem, normalizeItemName } from '@/components/quotes/new-pricing-item-prompt';
 import { Lightbulb, ArrowLeft, FileEdit, Plus, Save, Sparkles, ClipboardList, ChevronDown, ChevronUp, MessageSquare, Send } from 'lucide-react';
 // OptionalQuestions verwijderd - hovenier is de specialist
 import WorkOrderPreview from '@/components/quote/WorkOrderPreview';
@@ -120,6 +122,11 @@ export default function OfferteMaker() {
   } | null>(null);
   const [learningActivity, setLearningActivity] = useState('');
   const [savingLearning, setSavingLearning] = useState(false);
+
+  // "Nieuw item?"-prompt state: welke regel, en per regel voor welke
+  // omschrijving al gevraagd is (zodat dezelfde vraag niet blijft terugkomen)
+  const [newItemPrompt, setNewItemPrompt] = useState<{ sectionId: string; itemId: string } | null>(null);
+  const [askedNewItem, setAskedNewItem] = useState<Record<string, string>>({});
 
   // Chat editing state
   const [chatInstruction, setChatInstruction] = useState('');
@@ -416,6 +423,36 @@ export default function OfferteMaker() {
         console.error('Error updating item:', error);
       }
     }
+  };
+
+  // Na het bewerken van een omschrijving: vraag of dit een nieuw
+  // bibliotheek-item is (hernoemd t.o.v. koppeling, of losse regel)
+  const handleItemDescriptionBlur = (sectionId: string, itemId: string) => {
+    if (learningPrompt) return;
+    const section = sections.find(s => s.id === sectionId);
+    const item = section?.line_items.find(i => i.id === itemId);
+    if (!item) return;
+
+    const linked = item.pricing_id ? pricing.find(p => p.id === item.pricing_id) : null;
+    const normalized = normalizeItemName(item.description);
+
+    if (shouldPromptNewPricingItem({
+      description: item.description,
+      pricingId: item.pricing_id,
+      linkedItemName: linked?.item_name ?? null,
+      alreadyAsked: askedNewItem[itemId] === normalized
+    })) {
+      setAskedNewItem(prev => ({ ...prev, [itemId]: normalized }));
+      setNewItemPrompt({ sectionId, itemId });
+    }
+  };
+
+  const handleNewItemCreated = (created: CreatedPricingItem) => {
+    if (newItemPrompt) {
+      updateItem(newItemPrompt.sectionId, newItemPrompt.itemId, 'pricing_id', created.id);
+    }
+    setPricing(prev => [...prev, created]);
+    setNewItemPrompt(null);
   };
 
   const deleteItem = async (sectionId: string, itemId: string) => {
@@ -1277,6 +1314,7 @@ Klant wil nieuwe tuin van 6x8 meter
                     onMoveItemDown={moveItemDown}
                     onReorderItems={reorderItems}
                     onMoveItemToSection={moveItemToSection}
+                    onItemDescriptionBlur={handleItemDescriptionBlur}
                   />
                 )}
               </div>
@@ -1447,6 +1485,25 @@ Klant wil nieuwe tuin van 6x8 meter
           }}
         />
       )}
+
+      {/* "Nieuw item voor prijsbibliotheek?" banner */}
+      {newItemPrompt && (() => {
+        const promptSection = sections.find(s => s.id === newItemPrompt.sectionId);
+        const promptItem = promptSection?.line_items.find(i => i.id === newItemPrompt.itemId);
+        if (!promptItem) return null;
+        return (
+          <NewPricingItemDialog
+            description={promptItem.description}
+            lineType={promptItem.line_type === 'arbeid' ? 'arbeid' : 'materiaal'}
+            unit={promptItem.unit}
+            unitPrice={promptItem.unit_price}
+            categories={[...new Set(pricing.map(p => p.category))]}
+            defaultCategory={pricing.find(p => p.id === promptItem.pricing_id)?.category}
+            onCreated={handleNewItemCreated}
+            onClose={() => setNewItemPrompt(null)}
+          />
+        );
+      })()}
 
       {/* AI Leermoment banner */}
       {learningPrompt && (

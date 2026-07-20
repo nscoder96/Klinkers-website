@@ -37,6 +37,7 @@ interface SortableSectionListProps {
   onMoveItemDown: (sectionId: string, itemId: string) => void;
   onReorderItems: (sectionId: string, newItems: LineItem[]) => void;
   onMoveItemToSection: (fromSectionId: string, toSectionId: string, itemId: string, newIndex: number) => void;
+  onItemDescriptionBlur?: (sectionId: string, itemId: string) => void;
 }
 
 export function SortableSectionList({
@@ -49,6 +50,7 @@ export function SortableSectionList({
   onDeleteItem,
   onReorderItems,
   onMoveItemToSection,
+  onItemDescriptionBlur,
 }: SortableSectionListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<'section' | 'item' | null>(null);
@@ -175,6 +177,7 @@ export function SortableSectionList({
               onAddItem={() => onAddItem(section.id)}
               onUpdateItem={(itemId, field, value) => onUpdateItem(section.id, itemId, field, value)}
               onDeleteItem={(itemId) => onDeleteItem(section.id, itemId)}
+              onItemDescriptionBlur={(itemId) => onItemDescriptionBlur?.(section.id, itemId)}
             />
           ))}
         </div>

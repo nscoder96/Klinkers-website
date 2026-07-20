@@ -26,6 +26,7 @@ interface SortableSectionProps {
   onAddItem: () => void;
   onUpdateItem: (itemId: string, field: keyof LineItem, value: number | string | boolean) => void;
   onDeleteItem: (itemId: string) => void;
+  onItemDescriptionBlur?: (itemId: string) => void;
 }
 
 export function SortableSection({
@@ -36,6 +37,7 @@ export function SortableSection({
   onAddItem,
   onUpdateItem,
   onDeleteItem,
+  onItemDescriptionBlur,
 }: SortableSectionProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(section.title);
@@ -168,6 +170,7 @@ export function SortableSection({
                         sectionId={section.id}
                         onUpdate={(field, value) => onUpdateItem(item.id, field, value)}
                         onDelete={() => onDeleteItem(item.id)}
+                        onDescriptionBlur={() => onItemDescriptionBlur?.(item.id)}
                       />
                     ))}
                   </div>

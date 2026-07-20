@@ -29,6 +29,7 @@ interface QuoteLineItemRowProps {
   sectionId: string;
   onUpdate: (field: keyof LineItem, value: number | string | boolean) => void;
   onDelete: () => void;
+  onDescriptionBlur?: () => void;
 }
 
 export function QuoteLineItemRow({
@@ -36,6 +37,7 @@ export function QuoteLineItemRow({
   sectionId,
   onUpdate,
   onDelete,
+  onDescriptionBlur,
 }: QuoteLineItemRowProps) {
   const {
     attributes,
@@ -111,6 +113,7 @@ export function QuoteLineItemRow({
         <Input
           value={item.description}
           onChange={(e) => onUpdate('description', e.target.value)}
+          onBlur={onDescriptionBlur}
           className="h-8 text-sm"
           placeholder="Omschrijving"
         />
