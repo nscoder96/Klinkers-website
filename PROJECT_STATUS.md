@@ -1,6 +1,22 @@
 # PROJECT_STATUS — Klinkers & Co offerte-tool
 
-**Laatste update:** 2026-07-07 (avond) · alles hieronder is live op productie (www.klinkersenco.nl)
+**Laatste update:** 2026-07-20 (offerte-review KC-2026-555)
+
+## Sessie 2026-07-20 — review KC-2026-555 + fixes (nog NIET gepusht)
+
+- Offerte KC-2026-555 gecontroleerd en in productie-DB gecorrigeerd (omschrijving,
+  sectietitels, regeltypes, opsluitbanden in stuks, lead-telefoonveld geleegd).
+  Nieuwe prijsitems "Uitbreken straatwerk" en "Herbestraten 10 x 10" (bestrating,
+  arbeid) aangemaakt en de regels eraan gekoppeld.
+- Commit `302a0a4`: oude builder (/admin/offerte/[id]) stuurde `line_type` niet mee
+  in de opslaan-lus → alles werd 'materiaal' (API-default). Gefixt.
+- Commit `316eeba`: bij aangepaste regelomschrijving vraagt de app nu of dit een
+  nieuw prijsitem is (beide editors); bij ja wordt het item aangemaakt + gekoppeld.
+  Gedeelde logica in `new-pricing-item-prompt.ts`. Tests: 355 groen.
+- **Let op:** main staat 3 commits voor op origin (incl. `d60070c` van een andere
+  sessie) — push = productie-deploy, doet Niek zelf of op zijn verzoek.
+
+**Alles hieronder is live op productie (www.klinkersenco.nl)** (stand 2026-07-07, avond)
 
 ## Waar het project staat
 
