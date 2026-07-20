@@ -229,6 +229,19 @@ export async function PUT(
       );
     }
 
+    // Staartkosten (overhead) tellen mee in de offertetotalen — dezelfde
+    // conventie als de overhead-routes (subtotal is ALTIJD incl. overhead).
+    const { data: overheadItems } = await supabase
+      .from('quote_overhead')
+      .select('calculated_amount, vat_rate')
+      .eq('quote_id', quoteId);
+
+    for (const o of overheadItems ?? []) {
+      const amount = Number(o.calculated_amount) || 0;
+      serverSubtotal = round2(serverSubtotal + amount);
+      serverBtwRaw += amount * ((Number(o.vat_rate) || 21) / 100);
+    }
+
     const serverBtw = round2(serverBtwRaw);
     const serverTotal = round2(serverSubtotal + serverBtw);
 

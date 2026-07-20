@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Plus, Trash2, AlertCircle, RotateCcw } from 'lucide-react';
+import { computeScheduleAmounts } from '@/lib/payment-schedule';
 
 export interface PaymentScheduleItem {
   termijn: number;
@@ -127,8 +128,10 @@ export const EditPaymentScheduleForm = ({
 
       {/* Table rows */}
       <div className="space-y-2">
-        {schedule.map((item, index) => {
-          const amount = (quoteTotal * item.percentage) / 100;
+        {(() => {
+        const scheduleAmounts = computeScheduleAmounts(quoteTotal, schedule.map((item) => item.percentage));
+        return schedule.map((item, index) => {
+          const amount = scheduleAmounts[index];
           return (
             <div key={index} className="grid grid-cols-12 gap-2 items-center">
               <div className="col-span-1">
@@ -172,7 +175,8 @@ export const EditPaymentScheduleForm = ({
               </div>
             </div>
           );
-        })}
+        });
+        })()}
       </div>
 
       {/* Add row button */}

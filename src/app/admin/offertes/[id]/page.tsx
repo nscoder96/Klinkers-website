@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdminAuth } from '@/lib/useAdminAuth';
+import { computeScheduleAmounts } from '@/lib/payment-schedule';
 import AdminLayout from '@/components/admin/AdminLayout';
 import PDFDownloadButton from '@/components/pdf/PDFDownloadButton';
 import QuoteEditorTable, { Section as EditorSection, LineItem as EditorLineItem } from '@/components/quotes/QuoteEditorTable';
@@ -1551,8 +1552,13 @@ export default function QuoteDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {getEffectivePaymentSchedule().map((item, index) => {
-                          const amount = (quote.total * item.percentage) / 100;
+                        {(() => {
+                        const scheduleAmounts = computeScheduleAmounts(
+                          quote.total,
+                          getEffectivePaymentSchedule().map((item) => item.percentage)
+                        );
+                        return getEffectivePaymentSchedule().map((item, index) => {
+                          const amount = scheduleAmounts[index];
                           return (
                             <tr key={index} className="border-b">
                               <td className="py-2">{item.termijn}</td>
@@ -1561,7 +1567,8 @@ export default function QuoteDetailPage() {
                               <td className="py-2 text-right font-medium">{formatCurrency(amount)}</td>
                             </tr>
                           );
-                        })}
+                        });
+                        })()}
                       </tbody>
                       <tfoot>
                         <tr className="font-bold" style={{ color: colors.dark }}>

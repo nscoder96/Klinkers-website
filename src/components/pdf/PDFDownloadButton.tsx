@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
+import { computeScheduleAmounts } from '@/lib/payment-schedule';
 
 interface LineItem {
   id: string;
@@ -748,10 +749,12 @@ export default function PDFDownloadButton({ quote, sections = [], overhead = [],
 
       const lead = quote.leads || { name: 'Onbekend', phone: null, email: null, address: null, city: '' };
       const hasSections = sections && sections.length > 0;
-      const overheadTotal = overhead.reduce((sum, item) => sum + (item.calculated_amount || 0), 0);
-      const effectiveSubtotal = Math.round((quote.subtotal + overheadTotal) * 100) / 100;
-      const effectiveBtw = Math.round(effectiveSubtotal * (quote.btw_percentage / 100) * 100) / 100;
-      const effectiveTotal = Math.round((effectiveSubtotal + effectiveBtw) * 100) / 100;
+      // Opgeslagen offertetotalen zijn INCLUSIEF overhead (staartkosten) — de
+      // overhead-routes en opslagflows schrijven subtotal/btw/total al met
+      // overhead erin. Hier nogmaals optellen zou de staartkosten dubbel tellen.
+      const effectiveSubtotal = Math.round(quote.subtotal * 100) / 100;
+      const effectiveBtw = Math.round(quote.btw_amount * 100) / 100;
+      const effectiveTotal = Math.round(quote.total * 100) / 100;
 
       // Count which sections are visible
       const hasWerkomschrijvingPage = showWerkomschrijving && quote.work_description;
@@ -1067,6 +1070,19 @@ export default function PDFDownloadButton({ quote, sections = [], overhead = [],
               )}
 
 
+              {/* Staartkosten (overhead) — zit in het subtotaal, dus tonen */}
+              {overhead.length > 0 && (
+                <View style={styles.overheadSection}>
+                  <Text style={styles.overheadTitle}>Bijkomende kosten</Text>
+                  {overhead.map((item) => (
+                    <View key={item.id} style={styles.overheadRow}>
+                      <Text style={styles.overheadName}>{item.name}</Text>
+                      <Text style={styles.overheadValue}>{formatCurrency(item.calculated_amount || 0)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {/* Totals */}
               <View style={styles.specTotalsSection}>
                 {/* Arbeid/Materiaal subtotals when type column is shown */}
@@ -1169,17 +1185,20 @@ export default function PDFDownloadButton({ quote, sections = [], overhead = [],
                   <Text style={[styles.scheduleHeaderCell, styles.colPercentage]}>%</Text>
                   <Text style={[styles.scheduleHeaderCell, styles.colBedrag]}>Bedrag</Text>
                 </View>
-                {paymentSchedule.map((item, index) => {
-                  const amount = (quote.total * item.percentage) / 100;
-                  return (
+                {(() => {
+                  const scheduleAmounts = computeScheduleAmounts(
+                    quote.total,
+                    paymentSchedule.map((item) => item.percentage)
+                  );
+                  return paymentSchedule.map((item, index) => (
                     <View key={index} style={styles.scheduleRow}>
                       <Text style={[styles.scheduleCell, styles.colTermijn]}>{item.termijn}</Text>
                       <Text style={[styles.scheduleCell, styles.colOmschrijving]}>{item.omschrijving}</Text>
                       <Text style={[styles.scheduleCell, styles.colPercentage]}>{item.percentage}%</Text>
-                      <Text style={[styles.scheduleCell, styles.colBedrag]}>{formatCurrency(amount)}</Text>
+                      <Text style={[styles.scheduleCell, styles.colBedrag]}>{formatCurrency(scheduleAmounts[index])}</Text>
                     </View>
-                  );
-                })}
+                  ));
+                })()}
                 <View style={styles.scheduleFooter}>
                   <Text style={[styles.scheduleFooterCell, styles.colTermijn]}></Text>
                   <Text style={[styles.scheduleFooterCell, styles.colOmschrijving]}>Totaal</Text>
